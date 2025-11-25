@@ -48,6 +48,15 @@ try {
   const connection = await pool.getConnection();
   console.log("✅ Conexión a base de datos exitosa");
   console.log(`📊 Base de datos: ${process.env.DATABASE_NAME}`);
+
+    // AGREGAR ESTAS LÍNEAS DE DEBUG:
+  console.log("🔍 Variables de DB:", {
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    database: process.env.DB_NAME,
+    hasPassword: !!process.env.DB_PASSWORD
+  });
+  
   connection.release();
 } catch (error) {
   console.error("❌ Error al conectar a la base de datos:");

@@ -85,64 +85,84 @@ router.post("/register", async (req, res) => {
 // ========================================
 // 🔑 LOGIN TRADICIONAL (Usuario/Contraseña)
 // ========================================
-router.post("/login", async (req, res) => {
+router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
+    console.log('📝 Intento de login:', { username });
+
+    // Validar datos
     if (!username || !password) {
-      return res.status(400).json({ error: "Usuario y contraseña son requeridos" });
+      return res.status(400).json({ 
+        error: 'Usuario y contraseña son requeridos' 
+      });
     }
 
-    // Buscar usuario por username o email
-    const [users] = await pool.query(
-      "SELECT * FROM users WHERE username = ? OR email = ?",
-      [username, username]
-    );
+    // Buscar usuario
+    const query = `SELECT * FROM users WHERE username = ? OR email = ? LIMIT 1`;
+    const [users] = await pool.query(query, [username, username]);
 
     if (users.length === 0) {
-      return res.status(401).json({ error: "Credenciales incorrectas" });
+      console.log('❌ Usuario no encontrado:', username);
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
     }
 
     const user = users[0];
+    
+    // DEBUG: Ver qué hay en la base de datos
+    console.log('🔍 Usuario encontrado:', {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      hasPassword: !!user.password,
+      passwordLength: user.password?.length,
+      passwordPreview: user.password?.substring(0, 10) + '...'
+    });
 
-    // Verificar contraseña
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-
-    if (!isPasswordValid) {
-      return res.status(401).json({ error: "Credenciales incorrectas" });
+    // Verificar que la contraseña existe
+    if (!user.password) {
+      console.log('❌ Usuario sin contraseña en BD:', username);
+      return res.status(500).json({ 
+        error: 'Error de configuración. Contacta al administrador.' 
+      });
     }
 
-    // Generar JWT token
+    // Verificar contraseña
+    const validPassword = await bcrypt.compare(password, user.password);
+
+    if (!validPassword) {
+      console.log('❌ Contraseña incorrecta para:', username);
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+    }
+
+    // Generar token
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        username: user.username, 
-        email: user.email,
-        role_id: user.role_id 
-      },
+      { id: user.id, role_id: user.role_id, username: user.username },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: '24h' }
     );
 
-    // Responder con datos del usuario (sin contraseña)
+    console.log('✅ Login exitoso:', user.username);
+
     res.json({
-      success: true,
-      message: "Inicio de sesión exitoso",
+      message: 'Login exitoso',
       token,
       user: {
         id: user.id,
+        username: user.username,
+        email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
-        email: user.email,
-        username: user.username,
-        role_id: user.role_id,
-        profile_picture: user.profile_picture
+        role_id: user.role_id
       }
     });
 
   } catch (error) {
-    console.error("Error en /login:", error.message);
-    res.status(500).json({ error: "Error en el servidor" });
+    console.error('❌ Error en /api/login:', error);
+    res.status(500).json({ 
+      error: 'Error en el servidor',
+      details: error.message 
+    });
   }
 });
 
