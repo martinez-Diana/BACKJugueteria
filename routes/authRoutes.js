@@ -99,7 +99,20 @@ router.post('/login', async (req, res) => {
     }
 
     // Buscar usuario
-    const query = `SELECT * FROM users WHERE username = ? OR email = ? LIMIT 1`;
+    const query = `
+                  SELECT 
+                    id, 
+                    username, 
+                    email, 
+                    PASSWORD as password,
+                    first_name,
+                    last_name,
+                    role_id,
+                    status
+                  FROM users 
+                  WHERE username = ? OR email = ? 
+                  LIMIT 1
+                `;
     const [users] = await pool.query(query, [username, username]);
 
     if (users.length === 0) {
