@@ -1,21 +1,90 @@
-import express from 'express';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { OAuth2Client } from 'google-auth-library';
-import nodemailer from 'nodemailer';
-import crypto from 'crypto';
-import pool from '../config/db.js';
+import express from "express";
+import pool from "../config/db.js";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
+import { generateVerificationCode, sendVerificationEmail, sendPasswordResetEmail } from "../services/emailService.js";
 
 const router = express.Router();
 
-// Cliente de Google OAuth
-const googleClient = process.env.GOOGLE_CLIENT_ID 
-  ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
-  : null;
+// Configurar Google OAuth Client
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// ==========================================
-// 🔑 LOGIN TRADICIONAL
-// ==========================================
+// ========================================
+// 🔐 REGISTRO TRADICIONAL
+// ========================================
+router.post("/register", async (req, res) => {
+  try {
+    const {
+      first_name,
+      last_name,
+      mother_lastname,
+      email,
+      phone,
+      birthdate,
+      username,
+      password,
+      role_id
+    } = req.body;
+
+    // Validación
+    if (!first_name || !last_name || !email || !password || !username) {
+      return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+
+    // Verificar si el email ya existe
+    const [existingEmail] = await pool.query(
+      "SELECT id FROM users WHERE email = ?",
+      [email]
+    );
+
+    if (existingEmail.length > 0) {
+      return res.status(400).json({ error: "El correo electrónico ya está registrado" });
+    }
+
+    // Verificar si el username ya existe
+    const [existingUsername] = await pool.query(
+      "SELECT id FROM users WHERE username = ?",
+      [username]
+    );
+
+    if (existingUsername.length > 0) {
+      return res.status(400).json({ error: "El nombre de usuario ya está en uso" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const sql = `
+      INSERT INTO users 
+      (first_name, last_name, mother_lastname, email, phone, birthdate, username, password, role_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const values = [
+      first_name,
+      last_name,
+      mother_lastname,
+      email,
+      phone,
+      birthdate,
+      username,
+      hashedPassword,
+      role_id
+    ];
+
+    await pool.query(sql, values);
+
+    res.json({ success: true, message: "Usuario registrado correctamente" });
+
+  } catch (error) {
+    console.error("Error en /register:", error.message);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+});
+
+// ========================================
+// 🔑 LOGIN TRADICIONAL (Usuario/Contraseña)
+// ========================================
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -29,36 +98,29 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Buscar usuario por username o email
-    // ⚠️ NOTA: Usar PASSWORD en mayúsculas
-    const query = `
-      SELECT id, first_name, last_name, mother_lastname, email, phone, 
-             username, PASSWORD, google_id, profile_picture, birthdate, 
-             role_id, STATUS, created_at, updated_at
-      FROM users 
-      WHERE username = ? OR email = ?
-      LIMIT 1
-    `;
-    
+    // Buscar usuario
+    const query = `SELECT * FROM users WHERE username = ? OR email = ? LIMIT 1`;
     const [users] = await pool.query(query, [username, username]);
 
     if (users.length === 0) {
       console.log('❌ Usuario no encontrado:', username);
-      return res.status(401).json({ 
-        error: 'Usuario o contraseña incorrectos' 
-      });
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
     }
 
     const user = users[0];
-    console.log('✅ Usuario encontrado:', {
+    
+    // DEBUG: Ver qué hay en la base de datos
+    console.log('🔍 Usuario encontrado:', {
+      id: user.id,
       username: user.username,
       email: user.email,
-      hasPassword: !!user.PASSWORD, // ← Mayúsculas
-      passwordLength: user.PASSWORD?.length
+      hasPassword: !!user.password,
+      passwordLength: user.password?.length,
+      passwordPreview: user.password?.substring(0, 10) + '...'
     });
 
     // Verificar que la contraseña existe
-    if (!user.PASSWORD) {
+    if (!user.password) {
       console.log('❌ Usuario sin contraseña en BD:', username);
       return res.status(500).json({ 
         error: 'Error de configuración. Contacta al administrador.' 
@@ -66,29 +128,22 @@ router.post('/login', async (req, res) => {
     }
 
     // Verificar contraseña
-    const validPassword = await bcrypt.compare(password, user.PASSWORD);
+    const validPassword = await bcrypt.compare(password, user.password);
 
     if (!validPassword) {
       console.log('❌ Contraseña incorrecta para:', username);
-      return res.status(401).json({ 
-        error: 'Usuario o contraseña incorrectos' 
-      });
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
     }
 
-    // Generar token JWT
+    // Generar token
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        role_id: user.role_id,
-        username: user.username 
-      },
+      { id: user.id, role_id: user.role_id, username: user.username },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
     console.log('✅ Login exitoso:', user.username);
 
-    // Retornar datos (sin contraseña)
     res.json({
       message: 'Login exitoso',
       token,
@@ -98,11 +153,7 @@ router.post('/login', async (req, res) => {
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
-        mother_lastname: user.mother_lastname,
-        phone: user.phone,
-        birthdate: user.birthdate,
-        role_id: user.role_id,
-        status: user.STATUS
+        role_id: user.role_id
       }
     });
 
@@ -115,382 +166,394 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ==========================================
-// 📝 REGISTRO
-// ==========================================
-router.post('/register', async (req, res) => {
-  try {
-    const { 
-      username, 
-      email, 
-      password, 
-      first_name, 
-      last_name,
-      mother_lastname,
-      phone,
-      birthdate 
-    } = req.body;
-
-    console.log('📝 Intento de registro:', { username, email });
-
-    // Validar datos requeridos
-    if (!username || !email || !password || !first_name) {
-      return res.status(400).json({ 
-        error: 'Usuario, email, contraseña y nombre son requeridos' 
-      });
-    }
-
-    // Verificar si el usuario ya existe
-    const [existingUsers] = await pool.query(
-      'SELECT * FROM users WHERE username = ? OR email = ?',
-      [username, email]
-    );
-
-    if (existingUsers.length > 0) {
-      return res.status(409).json({ 
-        error: 'El usuario o email ya está registrado' 
-      });
-    }
-
-    // Hash de la contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insertar nuevo usuario (role_id = 3 para clientes)
-    // ⚠️ NOTA: Usar PASSWORD en mayúsculas
-    const [result] = await pool.query(
-      `INSERT INTO users 
-       (username, email, PASSWORD, first_name, last_name, mother_lastname, phone, birthdate, role_id) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 3)`,
-      [
-        username, 
-        email, 
-        hashedPassword, 
-        first_name, 
-        last_name || null, 
-        mother_lastname || null,
-        phone || null,
-        birthdate || null
-      ]
-    );
-
-    console.log('✅ Usuario registrado:', username);
-
-    res.status(201).json({ 
-      message: 'Usuario registrado exitosamente',
-      userId: result.insertId 
-    });
-
-  } catch (error) {
-    console.error('❌ Error en /api/register:', error);
-    res.status(500).json({ 
-      error: 'Error en el servidor',
-      details: error.message 
-    });
-  }
-});
-
-// ==========================================
-// 🔵 LOGIN CON GOOGLE
-// ==========================================
-router.post('/auth/google', async (req, res) => {
-  if (!googleClient) {
-    return res.status(503).json({ 
-      error: 'Autenticación con Google no configurada' 
-    });
-  }
-
-  try {
-    const { credential } = req.body;
-
-    // Verificar el token de Google
-    const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID
-    });
-
-    const payload = ticket.getPayload();
-    const { email, given_name, family_name, sub: googleId } = payload;
-
-    console.log('🔵 Login con Google:', email);
-
-    // Buscar usuario por email
-    let [users] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
-
-    let user;
-
-    if (users.length === 0) {
-      // Crear nuevo usuario
-      const username = email.split('@')[0];
-      
-      // ⚠️ NOTA: PASSWORD puede ser NULL para usuarios de Google
-      const [result] = await pool.query(
-        `INSERT INTO users 
-         (username, email, first_name, last_name, google_id, role_id) 
-         VALUES (?, ?, ?, ?, ?, 3)`,
-        [username, email, given_name, family_name, googleId]
-      );
-
-      user = {
-        id: result.insertId,
-        username,
-        email,
-        first_name: given_name,
-        last_name: family_name,
-        role_id: 3
-      };
-
-      console.log('✅ Usuario creado con Google:', email);
-    } else {
-      user = users[0];
-      
-      // Actualizar google_id si no existe
-      if (!user.google_id) {
-        await pool.query(
-          'UPDATE users SET google_id = ? WHERE id = ?',
-          [googleId, user.id]
-        );
-      }
-      
-      console.log('✅ Usuario existente con Google:', email);
-    }
-
-    // Generar token
-    const token = jwt.sign(
-      { id: user.id, role_id: user.role_id },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    res.json({
-      message: 'Login con Google exitoso',
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        mother_lastname: user.mother_lastname,
-        role_id: user.role_id
-      }
-    });
-
-  } catch (error) {
-    console.error('❌ Error en /api/auth/google:', error);
-    res.status(500).json({ 
-      error: 'Error al autenticar con Google',
-      details: error.message 
-    });
-  }
-});
-
-// ==========================================
-// 📧 SOLICITAR CÓDIGO POR EMAIL
-// ==========================================
-router.post('/auth/email/request-code', async (req, res) => {
+// ========================================
+// 📧 SOLICITAR CÓDIGO DE VERIFICACIÓN POR EMAIL
+// ========================================
+router.post("/auth/email/request-code", async (req, res) => {
   try {
     const { email } = req.body;
 
-    console.log('📧 Solicitando código para:', email);
+    if (!email) {
+      return res.status(400).json({ error: "El correo electrónico es requerido" });
+    }
 
-    // Verificar que el usuario existe
-    const [users] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+    // Verificar si el usuario existe
+    const [users] = await pool.query(
+      "SELECT * FROM users WHERE email = ?",
+      [email]
+    );
 
     if (users.length === 0) {
-      return res.status(404).json({ error: 'Email no registrado' });
+      return res.status(404).json({ error: "No existe una cuenta con este correo electrónico" });
     }
 
     // Generar código de 6 dígitos
-    const code = crypto.randomInt(100000, 999999).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+    const code = generateVerificationCode();
 
-    // Guardar código en la base de datos
-    // ⚠️ NOTA: Usar CODE en mayúsculas
+    // Calcular fecha de expiración (10 minutos)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Eliminar códigos anteriores del mismo email
     await pool.query(
-      `INSERT INTO verification_codes (email, CODE, expires_at) 
-       VALUES (?, ?, ?)`,
+      "DELETE FROM verification_codes WHERE email = ?",
+      [email]
+    );
+
+    // Guardar nuevo código en la BD
+    await pool.query(
+      "INSERT INTO verification_codes (email, code, expires_at) VALUES (?, ?, ?)",
       [email, code, expiresAt]
     );
 
-    console.log('✅ Código generado:', code, 'para:', email);
+    // Enviar código por correo
+    const emailSent = await sendVerificationEmail(email, code);
 
-    // TODO: Enviar email real con nodemailer
-    // Por ahora solo devolvemos éxito
-    res.json({ 
-      message: 'Código enviado exitosamente',
-      // SOLO PARA DESARROLLO - ELIMINAR EN PRODUCCIÓN:
-      debug_code: process.env.NODE_ENV === 'development' ? code : undefined
+    if (!emailSent) {
+      return res.status(500).json({ error: "Error al enviar el correo electrónico" });
+    }
+
+    res.json({
+      success: true,
+      message: "Código de verificación enviado a tu correo electrónico"
     });
 
   } catch (error) {
-    console.error('❌ Error al enviar código:', error);
-    res.status(500).json({ 
-      error: 'Error al enviar código',
-      details: error.message 
-    });
+    console.error("Error en /auth/email/request-code:", error.message);
+    res.status(500).json({ error: "Error en el servidor" });
   }
 });
 
-// ==========================================
-// ✅ VERIFICAR CÓDIGO
-// ==========================================
-router.post('/auth/email/verify-code', async (req, res) => {
+// ========================================
+// ✅ VERIFICAR CÓDIGO Y HACER LOGIN
+// ========================================
+router.post("/auth/email/verify-code", async (req, res) => {
   try {
     const { email, code } = req.body;
 
-    console.log('🔍 Verificando código para:', email);
-
-    // Buscar usuario
-    const [users] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
-
-    if (users.length === 0) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (!email || !code) {
+      return res.status(400).json({ error: "Email y código son requeridos" });
     }
 
-    const user = users[0];
-
-    // Verificar código
-    // ⚠️ NOTA: Usar CODE en mayúsculas
+    // Buscar código en la BD
     const [codes] = await pool.query(
-      `SELECT * FROM verification_codes 
-       WHERE email = ? AND CODE = ? AND expires_at > NOW() AND used = 0
-       ORDER BY created_at DESC LIMIT 1`,
+      "SELECT * FROM verification_codes WHERE email = ? AND code = ? AND used = FALSE",
       [email, code]
     );
 
     if (codes.length === 0) {
-      return res.status(401).json({ error: 'Código inválido o expirado' });
+      return res.status(401).json({ error: "Código inválido o ya utilizado" });
+    }
+
+    const verificationCode = codes[0];
+
+    // Verificar si el código ha expirado
+    if (new Date() > new Date(verificationCode.expires_at)) {
+      return res.status(401).json({ error: "El código ha expirado. Solicita uno nuevo" });
     }
 
     // Marcar código como usado
     await pool.query(
-      'UPDATE verification_codes SET used = 1 WHERE id = ?',
-      [codes[0].id]
+      "UPDATE verification_codes SET used = TRUE WHERE id = ?",
+      [verificationCode.id]
     );
 
-    // Generar token
+    // Obtener datos del usuario
+    const [users] = await pool.query(
+      "SELECT * FROM users WHERE email = ?",
+      [email]
+    );
+
+    const user = users[0];
+
+    // Generar JWT token
     const token = jwt.sign(
-      { id: user.id, role_id: user.role_id },
+      { 
+        id: user.id, 
+        username: user.username, 
+        email: user.email,
+        role_id: user.role_id 
+      },
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: "7d" }
     );
 
-    console.log('✅ Código verificado para:', email);
-
+    // Responder con datos del usuario
     res.json({
-      message: 'Verificación exitosa',
+      success: true,
+      message: "Inicio de sesión exitoso",
       token,
       user: {
         id: user.id,
-        username: user.username,
-        email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
-        mother_lastname: user.mother_lastname,
-        role_id: user.role_id
+        email: user.email,
+        username: user.username,
+        role_id: user.role_id,
+        profile_picture: user.profile_picture
       }
     });
 
   } catch (error) {
-    console.error('❌ Error al verificar código:', error);
-    res.status(500).json({ 
-      error: 'Error al verificar código',
-      details: error.message 
-    });
+    console.error("Error en /auth/email/verify-code:", error.message);
+    res.status(500).json({ error: "Error en el servidor" });
   }
 });
 
-// ==========================================
-// 🔄 RECUPERAR CONTRASEÑA - Solicitar token
-// ==========================================
-router.post('/auth/forgot-password', async (req, res) => {
+// ========================================
+// 🔵 LOGIN CON GOOGLE
+// ========================================
+router.post("/auth/google", async (req, res) => {
   try {
-    const { email } = req.body;
+    const { credential } = req.body;
 
-    console.log('🔑 Solicitud de recuperación de contraseña:', email);
-
-    // Verificar que el usuario existe
-    const [users] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
-
-    if (users.length === 0) {
-      // Por seguridad, no revelar si el email existe
-      return res.json({ 
-        message: 'Si el email existe, recibirás instrucciones para recuperar tu contraseña' 
-      });
+    if (!credential) {
+      return res.status(400).json({ error: "Token de Google no proporcionado" });
     }
 
-    // Generar token único
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+    // Verificar el token de Google
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
 
-    // Guardar token
-    await pool.query(
-      `INSERT INTO password_reset_tokens (email, token, expires_at) 
-       VALUES (?, ?, ?)`,
-      [email, token, expiresAt]
+    const payload = ticket.getPayload();
+    const googleId = payload.sub;
+    const email = payload.email;
+    const firstName = payload.given_name;
+    const lastName = payload.family_name;
+    const profilePicture = payload.picture;
+
+    // Verificar si el usuario ya existe (por google_id o email)
+    const [existingUsers] = await pool.query(
+      "SELECT * FROM users WHERE google_id = ? OR email = ?",
+      [googleId, email]
     );
 
-    console.log('✅ Token de recuperación generado para:', email);
+    let user;
 
-    // TODO: Enviar email con link de recuperación
-    res.json({ 
-      message: 'Si el email existe, recibirás instrucciones para recuperar tu contraseña',
-      // SOLO PARA DESARROLLO:
-      debug_token: process.env.NODE_ENV === 'development' ? token : undefined
+    if (existingUsers.length > 0) {
+      // Usuario existente - actualizar google_id si no lo tiene
+      user = existingUsers[0];
+      
+      if (!user.google_id) {
+        await pool.query(
+          "UPDATE users SET google_id = ?, profile_picture = ? WHERE id = ?",
+          [googleId, profilePicture, user.id]
+        );
+      }
+    } else {
+      // Nuevo usuario - crear cuenta con Google
+      const username = email.split("@")[0]; // Usar parte del email como username
+      
+      // Generar contraseña aleatoria (no se usará, pero el campo es NOT NULL)
+      const randomPassword = await bcrypt.hash(Math.random().toString(36), 10);
+
+      const sql = `
+        INSERT INTO users 
+        (first_name, last_name, email, username, password, google_id, profile_picture, role_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      const [result] = await pool.query(sql, [
+        firstName,
+        lastName || "",
+        email,
+        username,
+        randomPassword,
+        googleId,
+        profilePicture,
+        3 // role_id = 3 (Cliente por defecto)
+      ]);
+
+      // Obtener el usuario recién creado
+      const [newUser] = await pool.query("SELECT * FROM users WHERE id = ?", [result.insertId]);
+      user = newUser[0];
+    }
+
+    // Generar JWT token
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        username: user.username, 
+        email: user.email,
+        role_id: user.role_id 
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // Responder con datos del usuario
+    res.json({
+      success: true,
+      message: "Inicio de sesión con Google exitoso",
+      token,
+      user: {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        username: user.username,
+        role_id: user.role_id,
+        profile_picture: user.profile_picture || profilePicture
+      }
     });
 
   } catch (error) {
-    console.error('❌ Error en forgot-password:', error);
-    res.status(500).json({ error: 'Error al procesar solicitud' });
+    console.error("Error en /auth/google:", error.message);
+    res.status(500).json({ error: "Error al autenticar con Google" });
   }
 });
 
-// ==========================================
-// 🔄 RECUPERAR CONTRASEÑA - Resetear
-// ==========================================
-router.post('/auth/reset-password', async (req, res) => {
+// ========================================
+// 🔍 VERIFICAR TOKEN (Opcional - para rutas protegidas)
+// ========================================
+router.get("/verify", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ error: "Token no proporcionado" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Obtener datos actualizados del usuario
+    const [users] = await pool.query("SELECT * FROM users WHERE id = ?", [decoded.id]);
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const user = users[0];
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        username: user.username,
+        role_id: user.role_id,
+        profile_picture: user.profile_picture
+      }
+    });
+
+  } catch (error) {
+    console.error("Error en /verify:", error.message);
+    res.status(401).json({ error: "Token inválido o expirado" });
+  }
+});
+
+// ========================================
+// 🔐 SOLICITAR RECUPERACIÓN DE CONTRASEÑA
+// ========================================
+router.post("/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: "El correo electrónico es requerido" });
+    }
+
+    // Verificar si el usuario existe
+    const [users] = await pool.query(
+      "SELECT * FROM users WHERE email = ?",
+      [email]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: "No existe una cuenta con este correo electrónico" });
+    }
+
+    // Generar token único
+    const crypto = await import("crypto");
+    const token = crypto.randomBytes(32).toString("hex");
+
+    // Calcular fecha de expiración (1 hora)
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    // Eliminar tokens anteriores del mismo email
+    await pool.query(
+      "DELETE FROM password_reset_tokens WHERE email = ?",
+      [email]
+    );
+
+    // Guardar nuevo token en la BD
+    await pool.query(
+      "INSERT INTO password_reset_tokens (email, token, expires_at) VALUES (?, ?, ?)",
+      [email, token, expiresAt]
+    );
+
+    // Enviar correo con enlace
+    const emailSent = await sendPasswordResetEmail(email, token);
+
+    if (!emailSent) {
+      return res.status(500).json({ error: "Error al enviar el correo electrónico" });
+    }
+
+    res.json({
+      success: true,
+      message: "Se ha enviado un enlace de recuperación a tu correo electrónico"
+    });
+
+  } catch (error) {
+    console.error("Error en /auth/forgot-password:", error.message);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+});
+
+// ========================================
+// ✅ RESTABLECER CONTRASEÑA CON TOKEN
+// ========================================
+router.post("/auth/reset-password", async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
-    console.log('🔑 Intento de reseteo de contraseña');
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: "Token y nueva contraseña son requeridos" });
+    }
 
-    // Verificar token
+    // Buscar token en la BD
     const [tokens] = await pool.query(
-      `SELECT * FROM password_reset_tokens 
-       WHERE token = ? AND expires_at > NOW() AND used = 0
-       LIMIT 1`,
+      "SELECT * FROM password_reset_tokens WHERE token = ? AND used = FALSE",
       [token]
     );
 
     if (tokens.length === 0) {
-      return res.status(401).json({ error: 'Token inválido o expirado' });
+      return res.status(401).json({ error: "Token inválido o ya utilizado" });
     }
 
     const resetToken = tokens[0];
 
+    // Verificar si el token ha expirado
+    if (new Date() > new Date(resetToken.expires_at)) {
+      return res.status(401).json({ error: "El enlace ha expirado. Solicita uno nuevo" });
+    }
+
     // Hash de la nueva contraseña
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Actualizar contraseña
-    // ⚠️ NOTA: Usar PASSWORD en mayúsculas
+    // Actualizar contraseña del usuario
     await pool.query(
-      'UPDATE users SET PASSWORD = ? WHERE email = ?',
+      "UPDATE users SET password = ? WHERE email = ?",
       [hashedPassword, resetToken.email]
     );
 
     // Marcar token como usado
     await pool.query(
-      'UPDATE password_reset_tokens SET used = 1 WHERE id = ?',
+      "UPDATE password_reset_tokens SET used = TRUE WHERE id = ?",
       [resetToken.id]
     );
 
-    console.log('✅ Contraseña actualizada para:', resetToken.email);
-
-    res.json({ message: 'Contraseña actualizada exitosamente' });
+    res.json({
+      success: true,
+      message: "Contraseña actualizada correctamente"
+    });
 
   } catch (error) {
-    console.error('❌ Error en reset-password:', error);
-    res.status(500).json({ error: 'Error al resetear contraseña' });
+    console.error("Error en /auth/reset-password:", error.message);
+    res.status(500).json({ error: "Error en el servidor" });
   }
 });
 
