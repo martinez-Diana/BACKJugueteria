@@ -3,13 +3,25 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Configurar el transporter de Nodemailer
+// Configurar el transporter de Nodemailer con mejor manejo de errores
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  tls: {
+    rejectUnauthorized: false // Permite certificados autofirmados
+  }
+});
+
+// Verificar la configuración al iniciar
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("❌ Error en la configuración de email:", error);
+  } else {
+    console.log("✅ Servidor de email listo para enviar mensajes");
+  }
 });
 
 // Función para generar código de 6 dígitos
@@ -19,6 +31,12 @@ export const generateVerificationCode = () => {
 
 // Función para enviar código de verificación
 export const sendVerificationEmail = async (email, code) => {
+  // Validar que las credenciales estén configuradas
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error("❌ ERROR: Variables EMAIL_USER o EMAIL_PASS no configuradas");
+    return false;
+  }
+
   const mailOptions = {
     from: `"Juguetería Martínez" <${process.env.EMAIL_USER}>`,
     to: email,
@@ -64,18 +82,28 @@ export const sendVerificationEmail = async (email, code) => {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
     console.log(`✅ Código de verificación enviado a: ${email}`);
+    console.log(`📧 Message ID: ${info.messageId}`);
     return true;
   } catch (error) {
-    console.error("❌ Error al enviar correo:", error);
+    console.error("❌ Error detallado al enviar correo:");
+    console.error("Código de error:", error.code);
+    console.error("Mensaje:", error.message);
+    console.error("Stack:", error.stack);
     return false;
   }
 };
 
 // Función para enviar enlace de recuperación de contraseña
 export const sendPasswordResetEmail = async (email, token) => {
-  const resetLink = `http://localhost:5173/reset-password?token=${token}`;
+  // Validar que las credenciales estén configuradas
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error("❌ ERROR: Variables EMAIL_USER o EMAIL_PASS no configuradas");
+    return false;
+  }
+
+  const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
   
   const mailOptions = {
     from: `"Juguetería Martínez" <${process.env.EMAIL_USER}>`,
@@ -129,11 +157,15 @@ export const sendPasswordResetEmail = async (email, token) => {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
     console.log(`✅ Enlace de recuperación enviado a: ${email}`);
+    console.log(`📧 Message ID: ${info.messageId}`);
     return true;
   } catch (error) {
-    console.error("❌ Error al enviar correo de recuperación:", error);
+    console.error("❌ Error detallado al enviar correo de recuperación:");
+    console.error("Código de error:", error.code);
+    console.error("Mensaje:", error.message);
+    console.error("Stack:", error.stack);
     return false;
   }
 };
