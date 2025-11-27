@@ -76,7 +76,8 @@ app.use(
     origin: [
       "http://localhost:5173",
       "https://jmfrontend-production.up.railway.app",
-      "https://frontjugueteria-production.up.railway.app"
+      "https://frontjugueteria-production.up.railway.app",
+      "https://back-jugueteria.vercel.app"
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
