@@ -1,14 +1,9 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-import pool from "../db.js";
-// Si quieres usar Twilio real, descomenta la siguiente línea:
-// import twilio from "twilio";
+import pool from "../config/db.js"; // ← CAMBIAR: tu pool está en config/db.js
 
 dotenv.config();
-
-// ⚙️ Configura Twilio (si lo usarás realmente)
-// const client = twilio(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
 
 // 📦 Almacenamiento temporal de códigos SMS
 const codes = new Map();
@@ -16,86 +11,171 @@ const codes = new Map();
 // 🔐 Generar token JWT
 const generateToken = (user) => {
   return jwt.sign(
-    { id: user.id, email: user.email },
+    { id: user.id, username: user.username, email: user.email, role_id: user.role_id },
     process.env.JWT_SECRET,
-    { expiresIn: "1h" }
+    { expiresIn: "24h" }
   );
 };
 
 // ✅ REGISTRO
 export const registerUser = async (req, res) => {
   try {
-    const { name, email, phone, password } = req.body;
+    const {
+      first_name,
+      last_name,
+      mother_lastname,
+      email,
+      phone,
+      birthdate,
+      username,
+      password,
+      role_id
+    } = req.body;
 
-    if (!name || !email || !phone || !password)
-      return res.status(400).json({ message: "Todos los campos son obligatorios" });
+    // Validación de campos obligatorios
+    if (!first_name || !last_name || !email || !password || !username) {
+      return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
 
+    // Validar contraseña fuerte
     const strongPassword = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+={}\[\]:;"'<>,.?/~`-]).{8,}$/;
     if (!strongPassword.test(password)) {
       return res.status(400).json({
-        message:
-          "La contraseña debe tener al menos 8 caracteres, una mayúscula, un número y un símbolo",
+        error: "La contraseña debe tener al menos 8 caracteres, una mayúscula, un número y un símbolo",
       });
     }
 
-    const [existing] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
-    if (existing.length > 0)
-      return res.status(400).json({ message: "El correo ya está registrado" });
+    // Verificar si el email ya existe
+    const [existingEmail] = await pool.query(
+      "SELECT id FROM users WHERE email = ?",
+      [email]
+    );
+
+    if (existingEmail.length > 0) {
+      return res.status(400).json({ error: "El correo electrónico ya está registrado" });
+    }
+
+    // Verificar si el username ya existe
+    const [existingUsername] = await pool.query(
+      "SELECT id FROM users WHERE username = ?",
+      [username]
+    );
+
+    if (existingUsername.length > 0) {
+      return res.status(400).json({ error: "El nombre de usuario ya está en uso" });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await pool.query(
-      "INSERT INTO users (name, email, phone, password) VALUES (?, ?, ?, ?)",
-      [name, email, phone, hashedPassword]
-    );
+    const sql = `
+      INSERT INTO users 
+      (first_name, last_name, mother_lastname, email, phone, birthdate, username, password, role_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
 
-    res.json({ message: "Usuario registrado correctamente" });
+    const values = [
+      first_name,
+      last_name,
+      mother_lastname,
+      email,
+      phone,
+      birthdate,
+      username,
+      hashedPassword,
+      role_id || 3 // Por defecto Cliente
+    ];
+
+    await pool.query(sql, values);
+
+    res.json({ success: true, message: "Usuario registrado correctamente" });
+
   } catch (error) {
-    console.error("Error en registro:", error);
-    res.status(500).json({ message: "Error en el servidor" });
+    console.error("Error en /register:", error.message);
+    res.status(500).json({ error: "Error en el servidor" });
   }
 };
 
 // ✅ LOGIN (1° paso)
 export const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { username, password } = req.body;
 
-    if (!email || !password)
-      return res.status(400).json({ msg: "Correo y contraseña requeridos" });
+    console.log('📝 Intento de login:', { username });
 
-    const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
-    if (rows.length === 0)
-      return res.status(404).json({ msg: "Usuario no encontrado" });
+    if (!username || !password) {
+      return res.status(400).json({ 
+        error: 'Usuario y contraseña son requeridos' 
+      });
+    }
 
-    const user = rows[0];
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ msg: "Contraseña incorrecta" });
+    // Buscar usuario
+    const query = `
+      SELECT 
+        id, 
+        username, 
+        email, 
+        \`password\`,
+        first_name,
+        last_name,
+        role_id,
+        status
+      FROM users 
+      WHERE username = ? OR email = ? 
+      LIMIT 1
+    `;
+    const [users] = await pool.query(query, [username, username]);
 
-    // Generar código aleatorio de 6 dígitos
-    const code = Math.floor(100000 + Math.random() * 900000);
-    codes.set(email, code);
+    if (users.length === 0) {
+      console.log('❌ Usuario no encontrado:', username);
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+    }
 
-    // ⚙️ OPCIÓN 1: Enviar código con Twilio real
-    /*
-    await client.messages.create({
-      body: `Tu código de verificación es: ${code}`,
-      from: process.env.TWILIO_PHONE,
-      to: user.phone,
+    const user = users[0];
+
+    // Verificar que la contraseña existe
+    if (!user.password) {
+      console.log('❌ Usuario sin contraseña en BD:', username);
+      return res.status(500).json({ 
+        error: 'Error de configuración. Contacta al administrador.' 
+      });
+    }
+
+    // Verificar contraseña
+    const validPassword = await bcrypt.compare(password, user.password);
+
+    if (!validPassword) {
+      console.log('❌ Contraseña incorrecta para:', username);
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+    }
+
+    // Generar token
+    const token = generateToken(user);
+
+    console.log('✅ Login exitoso:', user.username);
+
+    res.json({
+      message: 'Login exitoso',
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        role_id: user.role_id
+      }
     });
-    */
 
-    // ⚙️ OPCIÓN 2: Simular envío de SMS (para pruebas sin Twilio)
-    console.log(`📱 Código SMS simulado para ${email}: ${code}`);
-
-    res.json({ msg: "Código SMS enviado correctamente (simulado para pruebas)" });
   } catch (error) {
-    console.error("Error en login:", error);
-    res.status(500).json({ msg: "Error en el servidor" });
+    console.error('❌ Error en /api/login:', error);
+    res.status(500).json({ 
+      error: 'Error en el servidor',
+      details: error.message 
+    });
   }
 };
 
-// ✅ VERIFICAR CÓDIGO (2° paso)
+// ✅ VERIFICAR CÓDIGO (2° paso) - Si usas SMS
 export const verifyCode = async (req, res) => {
   try {
     const { email, code } = req.body;
