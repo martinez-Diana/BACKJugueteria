@@ -8,7 +8,7 @@ const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    pass: process.env.EMAIL_PASSWORD, 
   },
   tls: {
     rejectUnauthorized: false // Permite certificados autofirmados
@@ -32,10 +32,10 @@ export const generateVerificationCode = () => {
 // Función para enviar código de verificación
 export const sendVerificationEmail = async (email, code) => {
   // Validar que las credenciales estén configuradas
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.error("❌ ERROR: Variables EMAIL_USER o EMAIL_PASS no configuradas");
-    return false;
-  }
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {  // ✅ Cambiar aquí
+  console.error("❌ ERROR: Variables EMAIL_USER o EMAIL_PASSWORD no configuradas");
+  return false;
+}
 
   const mailOptions = {
     from: `"Juguetería Martínez" <${process.env.EMAIL_USER}>`,
