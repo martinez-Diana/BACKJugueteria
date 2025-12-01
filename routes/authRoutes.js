@@ -461,6 +461,9 @@ router.get("/verify", async (req, res) => {
 // ========================================
 // 🔐 SOLICITAR RECUPERACIÓN DE CONTRASEÑA
 // ========================================
+// ========================================
+// 🔐 SOLICITAR RECUPERACIÓN DE CONTRASEÑA
+// ========================================
 router.post("/auth/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
@@ -469,50 +472,64 @@ router.post("/auth/forgot-password", async (req, res) => {
       return res.status(400).json({ error: "El correo electrónico es requerido" });
     }
 
+    // 🛡️ SEGURIDAD: SIEMPRE devolver el mismo mensaje
+    // Esto previene la enumeración de usuarios
+    const genericResponse = {
+      success: true,
+      message: "Si el correo existe en nuestro sistema, recibirás un enlace de recuperación"
+    };
+
     // Verificar si el usuario existe
     const [users] = await pool.query(
       "SELECT * FROM users WHERE email = ?",
       [email]
     );
 
+    // 👇 IMPORTANTE: Si NO existe el email, devolver mensaje genérico SIN enviar correo
     if (users.length === 0) {
-      return res.status(404).json({ error: "No existe una cuenta con este correo electrónico" });
+      console.log(`⚠️ Intento de recuperación con email inexistente: ${email}`);
+      return res.json(genericResponse); // ✅ Mismo mensaje que si existiera
     }
 
-    // Generar token único
+    // El usuario SÍ existe, proceder normalmente
     const crypto = await import("crypto");
     const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
 
-    // Calcular fecha de expiración (1 hora)
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-
-    // Eliminar tokens anteriores del mismo email
+    // Eliminar tokens anteriores
     await pool.query(
       "DELETE FROM password_reset_tokens WHERE email = ?",
       [email]
     );
 
-    // Guardar nuevo token en la BD
+    // Guardar nuevo token
     await pool.query(
       "INSERT INTO password_reset_tokens (email, token, expires_at) VALUES (?, ?, ?)",
       [email, token, expiresAt]
     );
 
-    // Enviar correo con enlace
+    // Enviar correo
     const emailSent = await sendPasswordResetEmail(email, token);
 
     if (!emailSent) {
-      return res.status(500).json({ error: "Error al enviar el correo electrónico" });
+      console.error(`❌ Error al enviar email a: ${email}`);
+      // 🛡️ SEGURIDAD: Aún así devolver mensaje genérico
+      return res.json(genericResponse);
     }
 
-    res.json({
-      success: true,
-      message: "Se ha enviado un enlace de recuperación a tu correo electrónico"
-    });
+    console.log(`✅ Email de recuperación enviado a: ${email}`);
+
+    // Devolver el mismo mensaje genérico
+    res.json(genericResponse);
 
   } catch (error) {
     console.error("Error en /auth/forgot-password:", error.message);
-    res.status(500).json({ error: "Error en el servidor" });
+    
+    // 🛡️ SEGURIDAD: Incluso en error, devolver mensaje genérico
+    res.json({
+      success: true,
+      message: "Si el correo existe en nuestro sistema, recibirás un enlace de recuperación"
+    });
   }
 });
 
