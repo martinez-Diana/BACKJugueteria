@@ -3,15 +3,15 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Configurar el transporter de Nodemailer con mejor manejo de errores
+// Configurar el transporter de Nodemailer
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD, 
+    pass: process.env.EMAIL_PASSWORD, // ✅ CONSISTENTE
   },
   tls: {
-    rejectUnauthorized: false // Permite certificados autofirmados
+    rejectUnauthorized: false
   }
 });
 
@@ -31,11 +31,11 @@ export const generateVerificationCode = () => {
 
 // Función para enviar código de verificación
 export const sendVerificationEmail = async (email, code) => {
-  // Validar que las credenciales estén configuradas
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {  // ✅ Cambiar aquí
-  console.error("❌ ERROR: Variables EMAIL_USER o EMAIL_PASSWORD no configuradas");
-  return false;
-}
+  // ✅ CONSISTENTE: EMAIL_PASSWORD
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    console.error("❌ ERROR: Variables EMAIL_USER o EMAIL_PASSWORD no configuradas");
+    return false;
+  }
 
   const mailOptions = {
     from: `"Juguetería Martínez" <${process.env.EMAIL_USER}>`,
@@ -90,16 +90,18 @@ export const sendVerificationEmail = async (email, code) => {
     console.error("❌ Error detallado al enviar correo:");
     console.error("Código de error:", error.code);
     console.error("Mensaje:", error.message);
-    console.error("Stack:", error.stack);
+    if (error.response) {
+      console.error("Respuesta del servidor:", error.response);
+    }
     return false;
   }
 };
 
 // Función para enviar enlace de recuperación de contraseña
 export const sendPasswordResetEmail = async (email, token) => {
-  // Validar que las credenciales estén configuradas
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.error("❌ ERROR: Variables EMAIL_USER o EMAIL_PASS no configuradas");
+  // ✅ CONSISTENTE: EMAIL_PASSWORD
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    console.error("❌ ERROR: Variables EMAIL_USER o EMAIL_PASSWORD no configuradas");
     return false;
   }
 
@@ -165,7 +167,9 @@ export const sendPasswordResetEmail = async (email, token) => {
     console.error("❌ Error detallado al enviar correo de recuperación:");
     console.error("Código de error:", error.code);
     console.error("Mensaje:", error.message);
-    console.error("Stack:", error.stack);
+    if (error.response) {
+      console.error("Respuesta del servidor:", error.response);
+    }
     return false;
   }
-};
+}
