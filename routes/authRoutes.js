@@ -1,4 +1,3 @@
-import { verifyToken } from "../middleware/authMiddleware.js";
 import express from "express";
 import pool from "../config/db.js";
 import bcrypt from "bcrypt";
@@ -587,55 +586,6 @@ router.post("/auth/reset-password", async (req, res) => {
     res.status(500).json({ error: "Error en el servidor" });
   }
 });
-// ========================================
-// 🚪 LOGOUT - Cerrar sesión actual
-// ========================================
-router.post("/auth/logout", verifyToken, async (req, res) => {
-  try {
-    const token = req.headers.authorization.split(" ")[1];
-    const decoded = jwt.decode(token);
-    const expiresAt = new Date(decoded.exp * 1000);
-    
-    // Agregar token a la blacklist
-    await pool.query(
-      `INSERT INTO token_blacklist (token, user_id, expires_at)
-       VALUES (?, ?, ?)`,
-      [token, req.user.id, expiresAt]
-    );
-    
-    res.json({ 
-      success: true, 
-      message: "Sesión cerrada correctamente" 
-    });
-  } catch (error) {
-    console.error("Error en logout:", error.message);
-    res.status(500).json({ error: "Error al cerrar sesión" });
-  }
-});
 
-// ========================================
-// 🚪 LOGOUT ALL - Cerrar todas las sesiones
-// ========================================
-router.post("/auth/logout-all", verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    
-    // Marcar timestamp de revocación global para este usuario
-    await pool.query(
-      `INSERT INTO user_logout_all (user_id, revoked_at) 
-       VALUES (?, NOW())
-       ON DUPLICATE KEY UPDATE revoked_at = NOW()`,
-      [userId]
-    );
-    
-    res.json({ 
-      success: true, 
-      message: "Todas las sesiones han sido cerradas" 
-    });
-  } catch (error) {
-    console.error("Error en logout-all:", error.message);
-    res.status(500).json({ error: "Error al cerrar sesiones" });
-  }
-});
 
 export default router;
