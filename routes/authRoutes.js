@@ -56,8 +56,8 @@ router.post("/register", async (req, res) => {
 
     const sql = `
       INSERT INTO users 
-      (first_name, last_name, mother_lastname, email, phone, birthdate, username, password, role_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (first_name, last_name, mother_lastname, email, phone, birthdate, username, password, role_id, is_verified)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE)
     `;
 
     const values = [
@@ -74,7 +74,35 @@ router.post("/register", async (req, res) => {
 
     await pool.query(sql, values);
 
-    res.json({ success: true, message: "Usuario registrado correctamente" });
+    // 🆕 GENERAR Y ENVIAR CÓDIGO DE VERIFICACIÓN
+    const verificationCode = generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
+
+    // Eliminar códigos anteriores del mismo email
+    await pool.query(
+      "DELETE FROM verification_codes WHERE email = ?",
+      [email]
+    );
+
+    // Guardar nuevo código
+    await pool.query(
+      "INSERT INTO verification_codes (email, code, expires_at, used) VALUES (?, ?, ?, FALSE)",
+      [email, verificationCode, expiresAt]
+    );
+
+    // Enviar email con código
+    const emailSent = await sendVerificationEmail(email, verificationCode);
+
+    if (!emailSent) {
+      console.error("⚠️ No se pudo enviar el email de verificación");
+      // Aún así permitir el registro
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Usuario registrado correctamente. Revisa tu correo para verificar tu cuenta.",
+      email: email // Para pasarlo al componente de verificación
+    });
 
   } catch (error) {
     console.error("Error en /register:", error.message);
@@ -583,6 +611,112 @@ router.post("/auth/reset-password", async (req, res) => {
 
   } catch (error) {
     console.error("Error en /auth/reset-password:", error.message);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+  
+});
+// ========================================
+// ✅ VERIFICAR EMAIL DESPUÉS DEL REGISTRO
+// ========================================
+router.post("/verify-email", async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({ error: "Email y código son requeridos" });
+    }
+
+    // Buscar código en la BD
+    const [codes] = await pool.query(
+      "SELECT * FROM verification_codes WHERE email = ? AND code = ? AND used = FALSE",
+      [email, code]
+    );
+
+    if (codes.length === 0) {
+      return res.status(401).json({ error: "Código inválido o ya utilizado" });
+    }
+
+    const verificationCode = codes[0];
+
+    // Verificar si el código ha expirado
+    if (new Date() > new Date(verificationCode.expires_at)) {
+      return res.status(401).json({ error: "El código ha expirado. Solicita uno nuevo" });
+    }
+
+    // Marcar código como usado
+    await pool.query(
+      "UPDATE verification_codes SET used = TRUE WHERE id = ?",
+      [verificationCode.id]
+    );
+
+    // Marcar usuario como verificado
+    await pool.query(
+      "UPDATE users SET is_verified = TRUE WHERE email = ?",
+      [email]
+    );
+
+    res.json({ 
+      success: true, 
+      message: "Correo verificado exitosamente" 
+    });
+
+  } catch (error) {
+    console.error("Error en /verify-email:", error.message);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+});
+
+// ========================================
+// 🔄 REENVIAR CÓDIGO DE VERIFICACIÓN
+// ========================================
+router.post("/resend-verification", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: "El correo electrónico es requerido" });
+    }
+
+    // Verificar que el usuario existe
+    const [users] = await pool.query(
+      "SELECT * FROM users WHERE email = ?",
+      [email]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    // Generar nuevo código
+    const newCode = generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Eliminar códigos anteriores
+    await pool.query(
+      "DELETE FROM verification_codes WHERE email = ?",
+      [email]
+    );
+
+    // Guardar nuevo código
+    await pool.query(
+      "INSERT INTO verification_codes (email, code, expires_at, used) VALUES (?, ?, ?, FALSE)",
+      [email, newCode, expiresAt]
+    );
+
+    // Enviar email
+    const emailSent = await sendVerificationEmail(email, newCode);
+
+    if (!emailSent) {
+      return res.status(500).json({ error: "Error al enviar el correo" });
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Código reenviado exitosamente" 
+    });
+
+  } catch (error) {
+    console.error("Error en /resend-verification:", error.message);
     res.status(500).json({ error: "Error en el servidor" });
   }
 });
