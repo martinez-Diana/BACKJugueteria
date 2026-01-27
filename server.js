@@ -77,7 +77,8 @@ app.use(
       "http://localhost:5173",
       "https://jmfrontend-production.up.railway.app",
       "https://frontjugueteria-production.up.railway.app",
-      "https://back-jugueteria.vercel.app"
+      "https://back-jugueteria.vercel.app",
+      "https://starlit-gumdrop-ac85c8.netlify.app"
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
