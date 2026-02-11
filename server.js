@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes.js";
 import pool from "./config/db.js";
+import productosRoutes from "./routes/productosRoutes.js"; 
 
 dotenv.config();
 
@@ -75,6 +76,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
+      "http://localhost:5175",
       "https://jmfrontend-production.up.railway.app",
       "https://frontjugueteria-production.up.railway.app",
       "https://back-jugueteria.vercel.app",
@@ -92,6 +94,7 @@ app.use(express.json());
 // 🛣️ RUTAS
 // ==========================================
 app.use("/api", authRoutes);
+app.use("/api/productos", productosRoutes); 
 
 // Ruta de health check
 app.get("/", (req, res) => {
