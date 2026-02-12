@@ -143,4 +143,68 @@ router.post("/", async (req, res) => {
   }
 });
 
+// ==========================================
+// 📊 RUTA: ESTADÍSTICAS DE INVENTARIO
+// ==========================================
+router.get("/stats/inventario", async (req, res) => {
+  try {
+    console.log("📊 GET /api/productos/stats/inventario - Obteniendo estadísticas...");
+
+    // Estadísticas generales
+    const [stats] = await pool.query(`
+      SELECT 
+        COUNT(*) as total_productos,
+        SUM(cantidad) as total_unidades,
+        SUM(cantidad * precio) as valor_inventario,
+        COUNT(CASE WHEN cantidad < 10 THEN 1 END) as productos_stock_bajo,
+        COUNT(CASE WHEN cantidad = 0 THEN 1 END) as productos_agotados
+      FROM productos 
+      WHERE estado = 'activo'
+    `);
+
+    // Distribución por categorías
+    const [categorias] = await pool.query(`
+      SELECT 
+        categoria,
+        COUNT(*) as cantidad_productos,
+        SUM(cantidad) as unidades_totales
+      FROM productos 
+      WHERE estado = 'activo'
+      GROUP BY categoria
+      ORDER BY cantidad_productos DESC
+    `);
+
+    // Productos con stock bajo
+    const [stockBajo] = await pool.query(`
+      SELECT 
+        id_producto,
+        nombre,
+        sku,
+        categoria,
+        cantidad,
+        precio,
+        imagen
+      FROM productos
+      WHERE estado = 'activo' AND cantidad < 10
+      ORDER BY cantidad ASC
+      LIMIT 5
+    `);
+
+    console.log("✅ Estadísticas calculadas exitosamente");
+
+    res.json({
+      resumen: stats[0],
+      por_categoria: categorias,
+      stock_bajo: stockBajo
+    });
+
+  } catch (error) {
+    console.error("❌ Error al obtener estadísticas:", error.message);
+    res.status(500).json({ 
+      error: "Error al obtener estadísticas", 
+      details: error.message 
+    });
+  }
+});
+
 export default router;
