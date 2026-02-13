@@ -207,4 +207,124 @@ router.get("/stats/inventario", async (req, res) => {
   }
 });
 
+// ==================== PUT - ACTUALIZAR PRODUCTO COMPLETO ====================
+router.put("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      nombre, descripcion, categoria, marca, material,
+      edad_recomendada, genero, color, dimensiones,
+      tipo_juguete, proveedor, sku, cantidad, precio, 
+      precio_compra, imagen
+    } = req.body;
+
+    console.log(`🔄 PUT /api/productos/${id} - Actualizando producto...`);
+
+    // Verificar que el producto existe
+    const [productoExiste] = await pool.query(
+      'SELECT * FROM productos WHERE id_producto = ?',
+      [id]
+    );
+
+    if (productoExiste.length === 0) {
+      return res.status(404).json({ error: 'Producto no encontrado' });
+    }
+
+    // Verificar que el SKU no esté duplicado (excepto el mismo producto)
+    if (sku) {
+      const [skuDuplicado] = await pool.query(
+        'SELECT id_producto FROM productos WHERE sku = ? AND id_producto != ?',
+        [sku, id]
+      );
+
+      if (skuDuplicado.length > 0) {
+        return res.status(400).json({ 
+          error: 'El SKU ya existe en otro producto' 
+        });
+      }
+    }
+
+    // Actualizar producto
+    await pool.query(
+      `UPDATE productos SET 
+        nombre = ?,
+        descripcion = ?,
+        categoria = ?,
+        marca = ?,
+        material = ?,
+        edad_recomendada = ?,
+        genero = ?,
+        color = ?,
+        dimensiones = ?,
+        tipo_juguete = ?,
+        proveedor = ?,
+        sku = ?,
+        cantidad = ?,
+        precio = ?,
+        precio_compra = ?,
+        imagen = ?
+      WHERE id_producto = ?`,
+      [
+        nombre, descripcion, categoria, marca, material,
+        edad_recomendada, genero, color, dimensiones,
+        tipo_juguete, proveedor, sku, cantidad, precio,
+        precio_compra, imagen, id
+      ]
+    );
+
+    console.log(`✅ Producto ${id} actualizado correctamente`);
+
+    res.json({ 
+      message: 'Producto actualizado correctamente',
+      id_producto: id
+    });
+
+  } catch (error) {
+    console.error('❌ Error al actualizar producto:', error.message);
+    res.status(500).json({ 
+      error: 'Error al actualizar producto', 
+      details: error.message 
+    });
+  }
+});
+
+// ==================== DELETE - DESACTIVAR PRODUCTO (SOFT DELETE) ====================
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log(`🗑️ DELETE /api/productos/${id} - Desactivando producto...`);
+
+    const [productoExiste] = await pool.query(
+      'SELECT id_producto, nombre FROM productos WHERE id_producto = ?',
+      [id]
+    );
+
+    if (productoExiste.length === 0) {
+      return res.status(404).json({ error: 'Producto no encontrado' });
+    }
+
+    await pool.query(
+      'UPDATE productos SET estado = "inactivo" WHERE id_producto = ?',
+      [id]
+    );
+
+    console.log(`✅ Producto ${id} desactivado: ${productoExiste[0].nombre}`);
+
+    res.json({ 
+      message: 'Producto desactivado correctamente',
+      nombre: productoExiste[0].nombre
+    });
+
+  } catch (error) {
+    console.error('❌ Error al desactivar producto:', error.message);
+    res.status(500).json({ 
+      error: 'Error al desactivar producto', 
+      details: error.message 
+    });
+  }
+});
+
 export default router;
+
+
