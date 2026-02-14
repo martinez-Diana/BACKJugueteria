@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes.js";
 import pool from "./config/db.js";
 import productosRoutes from "./routes/productosRoutes.js"; 
+import clientesRoutes from './routes/clientesRoutes.js';
 
 dotenv.config();
 
@@ -95,6 +96,7 @@ app.use(express.json());
 // ==========================================
 app.use("/api", authRoutes);
 app.use("/api/productos", productosRoutes); 
+app.use("/api/clientes", clientesRoutes);
 
 // Ruta de health check
 app.get("/", (req, res) => {
