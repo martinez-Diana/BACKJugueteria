@@ -15,7 +15,7 @@ const pool = mysql.createPool({
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
   connectTimeout: 20000, // 20 segundos para conexiones lentas
-  
+  timezone: '-06:00' 
 });
 
 async function testDB() {

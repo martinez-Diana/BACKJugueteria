@@ -1,5 +1,7 @@
 import express from "express";
 import pool from "../config/db.js";
+import logger from "../utils/logger.js";
+const CTX = "ProductosService";
 
 const router = express.Router();
 
@@ -8,7 +10,7 @@ const router = express.Router();
 // ==========================================
 router.get("/", async (req, res) => {
   try {
-    console.log("📦 GET /api/productos - Obteniendo productos...");
+    logger.info("Consultando todos los productos", { context: CTX });
 
     const query = `
       SELECT * FROM productos 
@@ -18,12 +20,12 @@ router.get("/", async (req, res) => {
 
     const [productos] = await pool.query(query);
 
-    console.log(`✅ Se encontraron ${productos.length} productos`);
+    logger.info(`Se encontraron ${productos.length} productos`, { context: CTX });
 
     res.json(productos);
 
   } catch (error) {
-    console.error("❌ Error al obtener productos:", error.message);
+    logger.error("Error al obtener productos", { context: CTX, error: error.message });
     res.status(500).json({ 
       error: "Error al obtener productos", 
       details: error.message 
@@ -38,23 +40,24 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log(`🔍 GET /api/productos/${id} - Buscando producto...`);
+    logger.info(`Buscando producto con ID: ${id}`, { context: CTX, id });
 
     const query = "SELECT * FROM productos WHERE id_producto = ?";
     const [productos] = await pool.query(query, [id]);
 
     if (productos.length === 0) {
-      return res.status(404).json({ 
-        error: "Producto no encontrado" 
-      });
-    }
+  logger.warn(`Producto no encontrado con ID: ${id}`, { context: CTX, id });
+  return res.status(404).json({ 
+    error: "Producto no encontrado" 
+  });
+}
 
-    console.log(`✅ Producto encontrado: ${productos[0].nombre}`);
+    logger.info(`Producto encontrado: ${productos[0].nombre}`, { context: CTX });
 
     res.json(productos[0]);
 
   } catch (error) {
-    console.error("❌ Error al obtener producto:", error.message);
+    logger.error("Error al obtener producto", { context: CTX, error: error.message });
     res.status(500).json({ 
       error: "Error al obtener producto", 
       details: error.message 
@@ -66,8 +69,8 @@ router.get("/:id", async (req, res) => {
 // ==========================================
 router.post("/", async (req, res) => {
   try {
-    console.log("➕ POST /api/productos - Creando producto...");
-    console.log("📦 Datos recibidos:", req.body);
+    logger.info("Iniciando creación de nuevo producto", { context: CTX });
+    logger.info("Datos recibidos", { context: CTX, datos: req.body });
 
     const {
       nombre, descripcion, categoria, marca, material,
@@ -78,11 +81,12 @@ router.post("/", async (req, res) => {
 
     // ✅ Validaciones básicas
     if (!nombre || !sku || !categoria || !genero) {
-      return res.status(400).json({
-        error: "Faltan campos obligatorios",
-        requeridos: ["nombre", "sku", "categoria", "genero"]
-      });
-    }
+  logger.warn("Faltan campos obligatorios al crear producto", { context: CTX });
+  return res.status(400).json({
+    error: "Faltan campos obligatorios",
+    requeridos: ["nombre", "sku", "categoria", "genero"]
+  });
+}
 
     // ✅ Verificar que el SKU no exista
     const [skuExiste] = await pool.query(
@@ -126,7 +130,7 @@ router.post("/", async (req, res) => {
 
     const [result] = await pool.query(query, valores);
 
-    console.log(`✅ Producto creado con ID: ${result.insertId}`);
+    logger.info(`Producto creado exitosamente: ${nombre}`, { context: CTX, id: result.insertId });
 
     res.status(201).json({
       message: "Producto creado exitosamente",
@@ -135,7 +139,7 @@ router.post("/", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Error al crear producto:", error.message);
+    logger.error("Error al crear producto", { context: CTX, error: error.message });
     res.status(500).json({
       error: "Error al crear producto",
       details: error.message
@@ -218,7 +222,7 @@ router.put("/:id", async (req, res) => {
       precio_compra, imagen
     } = req.body;
 
-    console.log(`🔄 PUT /api/productos/${id} - Actualizando producto...`);
+    logger.info(`Iniciando actualización de producto ID: ${id}`, { context: CTX, id });
 
     // Verificar que el producto existe
     const [productoExiste] = await pool.query(
@@ -272,7 +276,7 @@ router.put("/:id", async (req, res) => {
       ]
     );
 
-    console.log(`✅ Producto ${id} actualizado correctamente`);
+    logger.info(`Producto actualizado exitosamente: ID ${id}`, { context: CTX, id });
 
     res.json({ 
       message: 'Producto actualizado correctamente',
@@ -280,7 +284,7 @@ router.put("/:id", async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error al actualizar producto:', error.message);
+    logger.error("Error al actualizar producto", { context: CTX, id, error: error.message });
     res.status(500).json({ 
       error: 'Error al actualizar producto', 
       details: error.message 
@@ -293,7 +297,7 @@ router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log(`🗑️ DELETE /api/productos/${id} - Desactivando producto...`);
+    logger.info(`Iniciando desactivación de producto ID: ${id}`, { context: CTX, id });
 
     const [productoExiste] = await pool.query(
       'SELECT id_producto, nombre FROM productos WHERE id_producto = ?',
@@ -301,15 +305,16 @@ router.delete("/:id", async (req, res) => {
     );
 
     if (productoExiste.length === 0) {
-      return res.status(404).json({ error: 'Producto no encontrado' });
-    }
+  logger.warn(`Producto no encontrado al eliminar ID: ${id}`, { context: CTX, id });
+  return res.status(404).json({ error: 'Producto no encontrado' });
+}
 
     await pool.query(
       'UPDATE productos SET estado = "inactivo" WHERE id_producto = ?',
       [id]
     );
 
-    console.log(`✅ Producto ${id} desactivado: ${productoExiste[0].nombre}`);
+    logger.info(`Producto desactivado: ${productoExiste[0].nombre} (ID: ${id})`, { context: CTX, id });
 
     res.json({ 
       message: 'Producto desactivado correctamente',
@@ -317,7 +322,7 @@ router.delete("/:id", async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error al desactivar producto:', error.message);
+    logger.error("Error al desactivar producto", { context: CTX, id, error: error.message });
     res.status(500).json({ 
       error: 'Error al desactivar producto', 
       details: error.message 
