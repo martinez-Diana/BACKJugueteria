@@ -1,0 +1,45 @@
+{"context":"ProductosService","level":"info","message":"Consultando todos los productos","timestamp":"2026-02-24 23:35:43"}
+{"context":"ProductosService","level":"info","message":"Se encontraron 13 productos","timestamp":"2026-02-24 23:35:44"}
+{"context":"ProductosService","id":"9999","level":"info","message":"Buscando producto con ID: 9999","timestamp":"2026-02-24 23:36:55"}
+{"context":"ProductosService","id":"9999","level":"info","message":"Buscando producto con ID: 9999","timestamp":"2026-02-24 23:39:37"}
+{"context":"ProductosService","id":"9999","level":"warn","message":"Producto no encontrado con ID: 9999","timestamp":"2026-02-24 23:39:38"}
+{"context":"ProductosService","id":"9999","level":"info","message":"Buscando producto con ID: 9999","timestamp":"2026-02-25 10:18:04"}
+{"context":"ProductosService","id":"9999","level":"warn","message":"Producto no encontrado con ID: 9999","timestamp":"2026-02-25 10:18:04"}
+{"context":"ProductosService","level":"info","message":"Iniciando creación de nuevo producto","timestamp":"2026-02-25 10:19:14"}
+{"context":"ProductosService","datos":{},"level":"info","message":"Datos recibidos","timestamp":"2026-02-25 10:19:14"}
+{"context":"ProductosService","level":"info","message":"Iniciando creación de nuevo producto","timestamp":"2026-02-25 10:21:00"}
+{"context":"ProductosService","datos":{},"level":"info","message":"Datos recibidos","timestamp":"2026-02-25 10:21:00"}
+{"context":"ProductosService","level":"warn","message":"Faltan campos obligatorios al crear producto","timestamp":"2026-02-25 10:21:00"}
+{"context":"ProductosService","level":"info","message":"Iniciando creación de nuevo producto","timestamp":"2026-02-25 10:21:03"}
+{"context":"ProductosService","datos":{},"level":"info","message":"Datos recibidos","timestamp":"2026-02-25 10:21:03"}
+{"context":"ProductosService","level":"warn","message":"Faltan campos obligatorios al crear producto","timestamp":"2026-02-25 10:21:03"}
+{"context":"ProductosService","level":"info","message":"Iniciando creación de nuevo producto","timestamp":"2026-02-25 10:21:04"}
+{"context":"ProductosService","datos":{},"level":"info","message":"Datos recibidos","timestamp":"2026-02-25 10:21:04"}
+{"context":"ProductosService","level":"warn","message":"Faltan campos obligatorios al crear producto","timestamp":"2026-02-25 10:21:04"}
+{"context":"ProductosService","level":"info","message":"Iniciando creación de nuevo producto","timestamp":"2026-02-25 10:21:04"}
+{"context":"ProductosService","datos":{},"level":"info","message":"Datos recibidos","timestamp":"2026-02-25 10:21:04"}
+{"context":"ProductosService","level":"warn","message":"Faltan campos obligatorios al crear producto","timestamp":"2026-02-25 10:21:04"}
+{"context":"ProductosService","id":"9999","level":"info","message":"Iniciando desactivación de producto ID: 9999","timestamp":"2026-02-25 10:32:30"}
+{"context":"ProductosService","id":"9999","level":"info","message":"Iniciando desactivación de producto ID: 9999","timestamp":"2026-02-25 10:37:54"}
+{"context":"ProductosService","id":"9999","level":"warn","message":"Producto no encontrado al eliminar ID: 9999","timestamp":"2026-02-25 10:37:54"}
+{"context":"ProductosService","level":"info","message":"Iniciando creación de nuevo producto","timestamp":"2026-02-25 10:39:00"}
+{"context":"ProductosService","datos":{"categoria":"muñecas","genero":"niña","nombre":"Test","precio":"precio_invalido","sku":"TEST-001"},"level":"info","message":"Datos recibidos","timestamp":"2026-02-25 10:39:00"}
+{"context":"ProductosService","error":"Incorrect decimal value: 'precio_invalido' for column 'precio' at row 1","level":"error","message":"Error al crear producto","timestamp":"2026-02-25 10:39:01"}
+{"context":"ClientesService","level":"info","message":"Consultando lista de clientes","timestamp":"2026-02-25 10:52:29"}
+{"context":"ClientesService","level":"info","message":"Se encontraron 8 clientes","timestamp":"2026-02-25 10:52:30"}
+{"context":"ClientesService","id":"9999","level":"info","message":"Buscando cliente con ID: 9999","timestamp":"2026-02-25 10:53:15"}
+{"context":"ClientesService","id":"9999","level":"warn","message":"Cliente no encontrado con ID: 9999","timestamp":"2026-02-25 10:53:16"}
+{"context":"ClientesService","id":"9999","level":"info","message":"Iniciando eliminación de cliente ID: 9999","timestamp":"2026-02-25 10:53:54"}
+{"context":"ClientesService","id":"9999","level":"warn","message":"Cliente no encontrado al eliminar ID: 9999","timestamp":"2026-02-25 10:53:55"}
+{"context":"ClientesService","id":"1","level":"info","message":"Iniciando actualización de cliente ID: 1","timestamp":"2026-02-25 10:54:54"}
+{"context":"ClientesService","id":"1","level":"info","message":"Cliente actualizado exitosamente: ID 1","timestamp":"2026-02-25 10:54:54"}
+{"context":"ClientesService","id":"1","level":"info","message":"Iniciando actualización de cliente ID: 1","timestamp":"2026-02-25 10:55:19"}
+{"context":"ClientesService","id":"1","level":"info","message":"Cliente actualizado exitosamente: ID 1","timestamp":"2026-02-25 10:55:20"}
+{"context":"VentasService","level":"info","message":"Consultando lista de ventas","timestamp":"2026-02-25 11:04:43"}
+{"context":"VentasService","level":"info","message":"Se encontraron 11 ventas","timestamp":"2026-02-25 11:04:43"}
+{"context":"VentasService","id":"9999","level":"info","message":"Buscando venta con ID: 9999","timestamp":"2026-02-25 11:05:21"}
+{"context":"VentasService","id":"9999","level":"warn","message":"Venta no encontrada con ID: 9999","timestamp":"2026-02-25 11:05:21"}
+{"context":"VentasService","level":"info","message":"Iniciando proceso de registro de venta","timestamp":"2026-02-25 11:06:06"}
+{"context":"VentasService","level":"warn","message":"Intento de crear venta sin productos","timestamp":"2026-02-25 11:06:06"}
+{"context":"VentasService","level":"info","message":"Iniciando proceso de registro de venta","timestamp":"2026-02-25 11:07:39"}
+{"context":"VentasService","error":"Producto con ID 9999 no encontrado","level":"error","message":"Error al registrar venta","timestamp":"2026-02-25 11:07:40"}

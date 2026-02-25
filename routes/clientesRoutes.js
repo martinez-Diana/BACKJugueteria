@@ -1,5 +1,7 @@
 import express from "express";
 import pool from "../config/db.js";
+import logger from "../utils/logger.js";
+const CTX = "ClientesService";
 
 const router = express.Router();
 
@@ -10,7 +12,7 @@ router.get("/", async (req, res) => {
   try {
     const { busqueda, role_id } = req.query;
     
-    console.log("📋 GET /api/clientes - Obteniendo clientes...");
+    logger.info("Consultando lista de clientes", { context: CTX });
 
     let query = `
       SELECT 
@@ -45,12 +47,12 @@ router.get("/", async (req, res) => {
 
     const [clientes] = await pool.query(query, params);
 
-    console.log(`✅ Se encontraron ${clientes.length} clientes`);
+    logger.info(`Se encontraron ${clientes.length} clientes`, { context: CTX });
 
     res.json(clientes);
 
   } catch (error) {
-    console.error("❌ Error al obtener clientes:", error.message);
+    logger.error("Error al obtener clientes", { context: CTX, error: error.message });
     res.status(500).json({ 
       error: "Error al obtener clientes", 
       details: error.message 
@@ -65,7 +67,7 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log(`🔍 GET /api/clientes/${id} - Buscando cliente...`);
+    logger.info(`Buscando cliente con ID: ${id}`, { context: CTX, id });
 
     const query = `
       SELECT 
@@ -85,17 +87,18 @@ router.get("/:id", async (req, res) => {
     const [clientes] = await pool.query(query, [id]);
 
     if (clientes.length === 0) {
-      return res.status(404).json({ 
-        error: "Cliente no encontrado" 
-      });
-    }
+  logger.warn(`Cliente no encontrado con ID: ${id}`, { context: CTX, id });
+  return res.status(404).json({ 
+    error: "Cliente no encontrado" 
+  });
+}
 
-    console.log(`✅ Cliente encontrado: ${clientes[0].first_name} ${clientes[0].last_name}`);
+    logger.info(`Cliente encontrado: ${clientes[0].first_name} ${clientes[0].last_name}`, { context: CTX });
 
     res.json(clientes[0]);
 
   } catch (error) {
-    console.error("❌ Error al obtener cliente:", error.message);
+    logger.error("Error al obtener cliente", { context: CTX, error: error.message });
     res.status(500).json({ 
       error: "Error al obtener cliente", 
       details: error.message 
@@ -111,7 +114,7 @@ router.put("/:id", async (req, res) => {
     const { id } = req.params;
     const { first_name, last_name, mother_lastname, email, phone, role_id } = req.body;
 
-    console.log(`🔄 PUT /api/clientes/${id} - Actualizando cliente...`);
+    logger.info(`Iniciando actualización de cliente ID: ${id}`, { context: CTX, id });
 
     // Verificar que el cliente existe
     const [clienteExiste] = await pool.query(
@@ -153,7 +156,7 @@ router.put("/:id", async (req, res) => {
       first_name, last_name, mother_lastname, email, phone, role_id, id
     ]);
 
-    console.log(`✅ Cliente ${id} actualizado correctamente`);
+    logger.info(`Cliente actualizado exitosamente: ID ${id}`, { context: CTX, id });
 
     res.json({ 
       message: 'Cliente actualizado correctamente',
@@ -161,7 +164,7 @@ router.put("/:id", async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error al actualizar cliente:', error.message);
+    logger.error("Error al actualizar cliente", { context: CTX, error: error.message });
     res.status(500).json({ 
       error: 'Error al actualizar cliente', 
       details: error.message 
@@ -176,7 +179,7 @@ router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log(`🗑️ DELETE /api/clientes/${id} - Eliminando cliente...`);
+    logger.info(`Iniciando eliminación de cliente ID: ${id}`, { context: CTX, id });
 
     const [clienteExiste] = await pool.query(
       'SELECT id, first_name, last_name FROM users WHERE id = ?',
@@ -184,12 +187,13 @@ router.delete("/:id", async (req, res) => {
     );
 
     if (clienteExiste.length === 0) {
-      return res.status(404).json({ error: 'Cliente no encontrado' });
-    }
+  logger.warn(`Cliente no encontrado al eliminar ID: ${id}`, { context: CTX, id });
+  return res.status(404).json({ error: 'Cliente no encontrado' });
+}
 
     await pool.query('DELETE FROM users WHERE id = ?', [id]);
 
-    console.log(`✅ Cliente ${id} eliminado: ${clienteExiste[0].first_name} ${clienteExiste[0].last_name}`);
+    logger.info(`Cliente eliminado: ${clienteExiste[0].first_name} ${clienteExiste[0].last_name} (ID: ${id})`, { context: CTX, id });
 
     res.json({ 
       message: 'Cliente eliminado correctamente',
@@ -197,7 +201,7 @@ router.delete("/:id", async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error al eliminar cliente:', error.message);
+    logger.error("Error al eliminar cliente", { context: CTX, error: error.message });
     res.status(500).json({ 
       error: 'Error al eliminar cliente', 
       details: error.message 
@@ -210,7 +214,7 @@ router.delete("/:id", async (req, res) => {
 // ==========================================
 router.get("/stats/resumen", async (req, res) => {
   try {
-    console.log("📊 GET /api/clientes/stats/resumen - Obteniendo estadísticas...");
+    logger.info("Calculando estadísticas de clientes", { context: CTX });
 
     const [stats] = await pool.query(`
       SELECT 
@@ -231,7 +235,7 @@ router.get("/stats/resumen", async (req, res) => {
       GROUP BY role_id
     `);
 
-    console.log("✅ Estadísticas calculadas exitosamente");
+    logger.info("Estadísticas de clientes calculadas exitosamente", { context: CTX });
 
     res.json({
       resumen: stats[0],
@@ -239,7 +243,7 @@ router.get("/stats/resumen", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Error al obtener estadísticas:", error.message);
+    logger.error("Error al obtener estadísticas de clientes", { context: CTX, error: error.message });
     res.status(500).json({ 
       error: "Error al obtener estadísticas", 
       details: error.message 
