@@ -1,1 +1,2 @@
 {"context":"ProductosService","error":"Incorrect decimal value: 'precio_invalido' for column 'precio' at row 1","level":"error","message":"Error al crear producto","timestamp":"2026-02-25 10:39:01"}
+{"context":"VentasService","error":"Producto con ID 9999 no encontrado","level":"error","message":"Error al registrar venta","timestamp":"2026-02-25 11:07:40"}

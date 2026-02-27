@@ -160,7 +160,7 @@ router.get("/stats/inventario", async (req, res) => {
         COUNT(*) as total_productos,
         SUM(cantidad) as total_unidades,
         SUM(cantidad * precio) as valor_inventario,
-        COUNT(CASE WHEN cantidad < 10 THEN 1 END) as productos_stock_bajo,
+        COUNT(CASE WHEN cantidad <= stock_minimo THEN 1 END) as productos_stock_bajo,
         COUNT(CASE WHEN cantidad = 0 THEN 1 END) as productos_agotados
       FROM productos 
       WHERE estado = 'activo'
@@ -189,7 +189,7 @@ router.get("/stats/inventario", async (req, res) => {
         precio,
         imagen
       FROM productos
-      WHERE estado = 'activo' AND cantidad < 10
+      WHERE estado = 'activo' AND cantidad <= stock_minimo
       ORDER BY cantidad ASC
       LIMIT 5
     `);
