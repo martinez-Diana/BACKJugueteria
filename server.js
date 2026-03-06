@@ -7,6 +7,7 @@ import productosRoutes from "./routes/productosRoutes.js";
 import clientesRoutes from './routes/clientesRoutes.js';
 import ventasRoutes from './routes/ventasRoutes.js';
 import contactoRoutes from './routes/contactoRoutes.js';
+import exportRoutes from "./routes/exportRoutes.js";
 
 dotenv.config();
 
@@ -101,6 +102,7 @@ app.use("/api/productos", productosRoutes);
 app.use("/api/clientes", clientesRoutes);
 app.use("/api/ventas", ventasRoutes);
 app.use('/api/contacto', contactoRoutes);
+app.use("/api/exportar", exportRoutes);
 
 // Ruta de health check
 app.get("/", (req, res) => {
