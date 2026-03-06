@@ -384,3 +384,27 @@
 {"context":"ProductosService","level":"info","message":"Se encontraron 65 productos","timestamp":"2026-02-27 03:42:20"}
 {"context":"ProductosService","level":"info","message":"Consultando todos los productos","timestamp":"2026-02-27 03:42:32"}
 {"context":"ProductosService","level":"info","message":"Se encontraron 65 productos","timestamp":"2026-02-27 03:42:33"}
+{"context":"ProductosService","level":"info","message":"Consultando todos los productos","timestamp":"2026-02-27 04:04:34"}
+{"context":"ProductosService","level":"info","message":"Se encontraron 65 productos","timestamp":"2026-02-27 04:04:35"}
+{"context":"ProductosService","level":"info","message":"Consultando todos los productos","timestamp":"2026-02-27 04:04:35"}
+{"context":"ProductosService","level":"info","message":"Se encontraron 65 productos","timestamp":"2026-02-27 04:04:35"}
+{"context":"ProductosService","id":"28","level":"info","message":"Buscando producto con ID: 28","timestamp":"2026-02-27 04:04:57"}
+{"context":"ProductosService","level":"info","message":"Producto encontrado: Ana Fashion muñecas","timestamp":"2026-02-27 04:04:58"}
+{"context":"ProductosService","id":"28","level":"info","message":"Buscando producto con ID: 28","timestamp":"2026-02-27 04:04:58"}
+{"context":"ProductosService","level":"info","message":"Producto encontrado: Ana Fashion muñecas","timestamp":"2026-02-27 04:04:58"}
+{"context":"ProductosService","level":"info","message":"Consultando todos los productos","timestamp":"2026-02-27 04:05:01"}
+{"context":"ProductosService","level":"info","message":"Se encontraron 65 productos","timestamp":"2026-02-27 04:05:02"}
+{"context":"ProductosService","level":"info","message":"Consultando todos los productos","timestamp":"2026-02-27 04:05:02"}
+{"context":"ProductosService","level":"info","message":"Se encontraron 65 productos","timestamp":"2026-02-27 04:05:02"}
+{"context":"ProductosService","id":"28","level":"info","message":"Buscando producto con ID: 28","timestamp":"2026-02-27 04:05:07"}
+{"context":"ProductosService","level":"info","message":"Producto encontrado: Ana Fashion muñecas","timestamp":"2026-02-27 04:05:07"}
+{"context":"ProductosService","id":"28","level":"info","message":"Buscando producto con ID: 28","timestamp":"2026-02-27 04:05:07"}
+{"context":"ProductosService","level":"info","message":"Producto encontrado: Ana Fashion muñecas","timestamp":"2026-02-27 04:05:08"}
+{"context":"ProductosService","level":"info","message":"Consultando todos los productos","timestamp":"2026-02-27 04:05:09"}
+{"context":"ProductosService","level":"info","message":"Se encontraron 65 productos","timestamp":"2026-02-27 04:05:09"}
+{"context":"ProductosService","level":"info","message":"Consultando todos los productos","timestamp":"2026-02-27 04:05:09"}
+{"context":"ProductosService","level":"info","message":"Se encontraron 65 productos","timestamp":"2026-02-27 04:05:09"}
+{"context":"ProductosService","level":"info","message":"Consultando todos los productos","timestamp":"2026-02-27 04:05:22"}
+{"context":"ProductosService","level":"info","message":"Se encontraron 65 productos","timestamp":"2026-02-27 04:05:23"}
+{"context":"ProductosService","level":"info","message":"Consultando todos los productos","timestamp":"2026-02-27 04:05:23"}
+{"context":"ProductosService","level":"info","message":"Se encontraron 65 productos","timestamp":"2026-02-27 04:05:23"}
