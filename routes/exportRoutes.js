@@ -4,19 +4,18 @@ import pool from '../config/db.js';
 const router = express.Router();
 
 // ── Convierte array de objetos a CSV ──────────────────
-function toCSV(rows) {
-  if (!rows || rows.length === 0) return '';
-  const headers = Object.keys(rows[0]);
+const toCSV = (rows) => {
+  if (!rows.length) return '';
+  const headers = Object.keys(rows[0]).join(';');
   const lines = rows.map(row =>
-    headers.map(h => {
-      const val = row[h] == null ? '' : String(row[h]);
-      return val.includes(',') || val.includes('"')
-        ? `"${val.replace(/"/g, '""')}"`
-        : val;
-    }).join(',')
+    Object.values(row).map(val => {
+      if (val === null || val === undefined) return '';
+      const str = String(val).replace(/"/g, '""');
+      return str.includes(';') || str.includes('\n') ? `"${str}"` : str;
+    }).join(';')
   );
-  return [headers.join(','), ...lines].join('\n');
-}
+  return [headers, ...lines].join('\n');
+};
 
 function sendCSV(res, filename, rows) {
   const csv = toCSV(rows);
