@@ -70,4 +70,27 @@ router.get('/historial', async (req, res) => {
   }
 });
 
+// Eliminar respaldo
+router.delete('/eliminar/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Obtener nombre del archivo
+    const [rows] = await pool.query('SELECT nombre FROM backups WHERE id = ?', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Respaldo no encontrado' });
+
+    const nombre = rows[0].nombre;
+
+    // Eliminar de Supabase Storage
+    await supabase.storage.from('backups').remove([nombre]);
+
+    // Eliminar de la tabla
+    await pool.query('DELETE FROM backups WHERE id = ?', [id]);
+
+    res.json({ success: true, mensaje: 'Respaldo eliminado correctamente' });
+  } catch (error) {
+    console.error('Error al eliminar respaldo:', error);
+    res.status(500).json({ error: 'Error al eliminar el respaldo' });
+  }
+});
 export default router;
