@@ -32,7 +32,8 @@ router.post('/generar', async (req, res) => {
 
     // Subir a Supabase Storage
     const fecha = new Date();
-    const nombreArchivo = `respaldo_${fecha.toISOString().slice(0,19).replace(/:/g,'-')}.sql`;
+    const fechaMx = new Date(fecha.getTime() - 6 * 60 * 60 * 1000);
+    const nombreArchivo = `respaldo_${fechaMx .toISOString().slice(0,19).replace(/:/g,'-')}.sql`;
     const buffer = Buffer.from(sqlContent, 'utf-8');
 
     const { error: uploadError } = await supabase.storage
@@ -50,7 +51,7 @@ router.post('/generar', async (req, res) => {
     const tamaño = `${(buffer.length / 1024).toFixed(1)} KB`;
     await pool.query(
       `INSERT INTO backups (nombre, fecha, hora, tamaño, url, tipo, estado) VALUES (?, ?, ?, ?, ?, 'manual', 'completado')`,
-      [nombreArchivo, fecha.toISOString().slice(0,10), fecha.toTimeString().slice(0,8), tamaño, urlData.publicUrl]
+      [nombreArchivo, fechaMx.toISOString().slice(0,10), fechaMx.toISOString().slice(11,19), tamaño, urlData.publicUrl]
     );
 
     res.json({ success: true, mensaje: 'Respaldo creado exitosamente', archivo: nombreArchivo, tamaño });
