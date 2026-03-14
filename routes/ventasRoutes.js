@@ -239,10 +239,10 @@ if (!folioUnico) {
 
     // Insertar venta
     const [resultVenta] = await connection.query(
-    `INSERT INTO ventas (id_usuario, folio, subtotal, descuento, total, metodo_pago, estado, notas, fecha_venta)
-    VALUES (?, ?, ?, ?, ?, ?, 'completada', ?, ?)`,
-    [id_usuario, folio, subtotal, descuento, total, metodo_pago, notas, fechaMexico]
-    );
+  `INSERT INTO ventas (id_usuario, folio, subtotal, descuento, total, metodo_pago, estado, notas, fecha_venta)
+  VALUES (?, ?, ?, ?, ?, ?, 'completada', ?, ?)`,
+  [id_usuario, folio, subtotal, descuento, total, metodo_pago, notas, fechaActual]
+);
 
     const id_venta = resultVenta.insertId;
 
