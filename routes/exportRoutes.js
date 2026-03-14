@@ -69,12 +69,14 @@ router.get('/inventario', async (req, res) => {
 
 router.get('/ventas', async (req, res) => {
   try {
-    const { desde, hasta } = req.query;
-    let where = '';
+    const { desde, hasta, estado, metodo_pago, columnas } = req.query;
+    let where = 'WHERE 1=1';
     const params = [];
-    if (desde && hasta) { where = 'WHERE DATE(v.fecha_venta) BETWEEN ? AND ?'; params.push(desde, hasta); }
-    else if (desde)     { where = 'WHERE DATE(v.fecha_venta) >= ?'; params.push(desde); }
-    else if (hasta)     { where = 'WHERE DATE(v.fecha_venta) <= ?'; params.push(hasta); }
+
+    if (desde) { where += ' AND DATE(v.fecha_venta) >= ?'; params.push(desde); }
+    if (hasta) { where += ' AND DATE(v.fecha_venta) <= ?'; params.push(hasta); }
+    if (estado) { where += ' AND v.estado = ?'; params.push(estado); }
+    if (metodo_pago) { where += ' AND v.metodo_pago = ?'; params.push(metodo_pago); }
 
     const [rows] = await pool.query(`
       SELECT v.folio AS 'Folio', v.fecha_venta AS 'Fecha',
@@ -93,8 +95,20 @@ router.get('/ventas', async (req, res) => {
       ${where}
       ORDER BY v.fecha_venta DESC
     `, params);
+
+    // Filtrar columnas si se especificaron
+    let rowsFinal = rows;
+    if (columnas) {
+      const cols = columnas.split(',');
+      rowsFinal = rows.map(row => {
+        const filtered = {};
+        cols.forEach(col => { if (row[col] !== undefined) filtered[col] = row[col]; });
+        return filtered;
+      });
+    }
+
     const fecha = new Date().toISOString().slice(0, 10);
-    sendCSV(res, `ventas_${fecha}.csv`, rows);
+    sendCSV(res, `ventas_${fecha}.csv`, rowsFinal);
   } catch (error) {
     console.error('Error exportar ventas:', error);
     res.status(500).json({ error: 'Error al exportar ventas' });
