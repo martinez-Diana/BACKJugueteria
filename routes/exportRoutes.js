@@ -79,7 +79,7 @@ router.get('/ventas', async (req, res) => {
     if (metodo_pago) { where += ' AND v.metodo_pago = ?'; params.push(metodo_pago); }
 
     const [rows] = await pool.query(`
-      SELECT v.folio AS 'Folio', v.fecha_venta AS 'Fecha',
+      SELECT v.folio AS 'Folio', DATE_FORMAT(CONVERT_TZ(v.fecha_venta, '+00:00', '-06:00'), '%d/%m/%Y %H:%i') AS 'Fecha',
              CONCAT(u.first_name, ' ', u.last_name) AS 'Cliente',
              u.email AS 'Email',
              dv.nombre_producto AS 'Producto',
