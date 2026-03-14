@@ -235,7 +235,7 @@ if (!folioUnico) {
 
         // Obtener fecha actual en zona horaria de México
     const fechaActual = new Date();
-    const fechaMexico = new Date(fechaActual.getTime() - (6 * 60 * 60 * 1000));
+    
 
     // Insertar venta
     const [resultVenta] = await connection.query(
