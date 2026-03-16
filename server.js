@@ -10,6 +10,7 @@ import contactoRoutes from './routes/contactoRoutes.js';
 import exportRoutes from "./routes/exportRoutes.js";
 import backupRoutes from './routes/backupRoutes.js';
 import apartadosRoutes from './routes/apartadosRoutes.js';
+import empleadosRoutes from './routes/empleadosRoutes.js';
 
 dotenv.config();
 
@@ -107,6 +108,7 @@ app.use('/api/contacto', contactoRoutes);
 app.use("/api/exportar", exportRoutes);
 app.use('/api/respaldos', backupRoutes);
 app.use('/api/apartados', apartadosRoutes);
+app.use('/api/empleados', empleadosRoutes);
 
 // Ruta de health check
 app.get("/", (req, res) => {
