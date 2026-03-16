@@ -184,6 +184,7 @@ router.post('/login', async (req, res) => {
 );
 
     console.log('✅ Login exitoso:', user.username);
+    await pool.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
 
     res.json({
       message: 'Login exitoso',
