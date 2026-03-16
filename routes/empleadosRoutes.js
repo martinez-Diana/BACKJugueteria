@@ -10,7 +10,7 @@ router.get('/', async (req, res) => {
     const [rows] = await pool.query(`
       SELECT u.id, u.first_name, u.last_name, u.mother_lastname,
              u.email, u.phone, u.username, u.status, u.created_at,
-             r.name AS rol
+             u.last_login, r.name AS rol
       FROM users u
       JOIN roles r ON u.role_id = r.id
       WHERE u.role_id = 2
@@ -70,6 +70,42 @@ router.put('/:id/estado', async (req, res) => {
     const { status } = req.body;
     await pool.query(
       'UPDATE users SET status=? WHERE id=? AND role_id=2', [status, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+// GET /api/empleados/:id/ventas - Historial de ventas del empleado
+router.get('/:id/ventas', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT 
+        v.folio, v.fecha_venta, v.total, v.metodo_pago, v.estado,
+        CONCAT(u.first_name, ' ', u.last_name) AS cliente
+      FROM ventas v
+      JOIN users u ON v.id_usuario = u.id
+      WHERE v.id_empleado = ? OR v.creado_por = ?
+      ORDER BY v.fecha_venta DESC
+      LIMIT 20
+    `, [req.params.id, req.params.id]);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/empleados/:id/reset-password
+router.put('/:id/reset-password', async (req, res) => {
+  try {
+    const { nueva_password } = req.body;
+    if (!nueva_password || nueva_password.length < 6) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+    const hash = await bcrypt.hash(nueva_password, 10);
+    await pool.query(
+      'UPDATE users SET password = ? WHERE id = ? AND role_id = 2',
+      [hash, req.params.id]
     );
     res.json({ success: true });
   } catch (error) {
