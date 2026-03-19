@@ -3,7 +3,6 @@ import pool from '../config/db.js';
 
 const router = express.Router();
 
-// ── Convierte array de objetos a CSV ──────────────────
 const toCSV = (rows) => {
   if (!rows.length) return '';
   const headers = Object.keys(rows[0]).join(';');
@@ -25,8 +24,19 @@ function sendCSV(res, filename, rows) {
   res.send(csv);
 }
 
+function filtrarColumnas(rows, columnas) {
+  if (!columnas) return rows;
+  const cols = columnas.split(',').map(c => decodeURIComponent(c.trim().replace(/\+/g, ' ')));
+  return rows.map(row => {
+    const filtered = {};
+    cols.forEach(col => { if (row[col] !== undefined) filtered[col] = row[col]; });
+    return filtered;
+  });
+}
+
 router.get('/productos', async (req, res) => {
   try {
+    const { columnas } = req.query;
     const [rows] = await pool.query(`
       SELECT sku AS 'SKU', nombre AS 'Nombre', categoria AS 'Categoria',
              marca AS 'Marca', precio AS 'Precio Venta',
@@ -35,7 +45,7 @@ router.get('/productos', async (req, res) => {
       FROM productos ORDER BY categoria, nombre
     `);
     const fecha = new Date().toISOString().slice(0, 10);
-    sendCSV(res, `productos_${fecha}.csv`, rows);
+    sendCSV(res, `productos_${fecha}.csv`, filtrarColumnas(rows, columnas));
   } catch (error) {
     console.error('Error exportar productos:', error);
     res.status(500).json({ error: 'Error al exportar productos' });
@@ -44,6 +54,7 @@ router.get('/productos', async (req, res) => {
 
 router.get('/inventario', async (req, res) => {
   try {
+    const { columnas } = req.query;
     const [rows] = await pool.query(`
       SELECT sku AS 'SKU', nombre AS 'Producto', categoria AS 'Categoria',
              cantidad AS 'Stock Actual', stock_minimo AS 'Stock Minimo',
@@ -60,7 +71,7 @@ router.get('/inventario', async (req, res) => {
       ORDER BY CASE WHEN cantidad = 0 THEN 0 WHEN cantidad <= stock_minimo THEN 1 ELSE 2 END, nombre
     `);
     const fecha = new Date().toISOString().slice(0, 10);
-    sendCSV(res, `inventario_${fecha}.csv`, rows);
+    sendCSV(res, `inventario_${fecha}.csv`, filtrarColumnas(rows, columnas));
   } catch (error) {
     console.error('Error exportar inventario:', error);
     res.status(500).json({ error: 'Error al exportar inventario' });
@@ -79,7 +90,8 @@ router.get('/ventas', async (req, res) => {
     if (metodo_pago) { where += ' AND v.metodo_pago = ?'; params.push(metodo_pago); }
 
     const [rows] = await pool.query(`
-      SELECT v.folio AS 'Folio', DATE_FORMAT(CONVERT_TZ(v.fecha_venta, '+00:00', '-06:00'), '%d/%m/%Y %H:%i') AS 'Fecha',
+      SELECT v.folio AS 'Folio',
+             DATE_FORMAT(CONVERT_TZ(v.fecha_venta, '+00:00', '-06:00'), '%d/%m/%Y %H:%i') AS 'Fecha',
              CONCAT(u.first_name, ' ', u.last_name) AS 'Cliente',
              u.email AS 'Email',
              dv.nombre_producto AS 'Producto',
@@ -96,19 +108,8 @@ router.get('/ventas', async (req, res) => {
       ORDER BY v.fecha_venta DESC
     `, params);
 
-    // Filtrar columnas si se especificaron
-    let rowsFinal = rows;
-    if (columnas) {
-      const cols = columnas.split(',');
-      rowsFinal = rows.map(row => {
-        const filtered = {};
-        cols.forEach(col => { if (row[col] !== undefined) filtered[col] = row[col]; });
-        return filtered;
-      });
-    }
-
     const fecha = new Date().toISOString().slice(0, 10);
-    sendCSV(res, `ventas_${fecha}.csv`, rowsFinal);
+    sendCSV(res, `ventas_${fecha}.csv`, filtrarColumnas(rows, columnas));
   } catch (error) {
     console.error('Error exportar ventas:', error);
     res.status(500).json({ error: 'Error al exportar ventas' });
@@ -117,17 +118,19 @@ router.get('/ventas', async (req, res) => {
 
 router.get('/clientes', async (req, res) => {
   try {
+    const { columnas } = req.query;
     const [rows] = await pool.query(`
       SELECT id AS 'ID', first_name AS 'Nombre', last_name AS 'Apellido Paterno',
              mother_lastname AS 'Apellido Materno', email AS 'Email',
              phone AS 'Telefono', username AS 'Usuario',
-             STATUS AS 'Estado', created_at AS 'Fecha Registro'
+             STATUS AS 'Estado',
+             DATE_FORMAT(CONVERT_TZ(created_at, '+00:00', '-06:00'), '%d/%m/%Y %H:%i') AS 'Fecha Registro'
       FROM users
       WHERE role_id = 3
       ORDER BY first_name
     `);
     const fecha = new Date().toISOString().slice(0, 10);
-    sendCSV(res, `clientes_${fecha}.csv`, rows);
+    sendCSV(res, `clientes_${fecha}.csv`, filtrarColumnas(rows, columnas));
   } catch (error) {
     console.error('Error exportar clientes:', error);
     res.status(500).json({ error: 'Error al exportar clientes' });
