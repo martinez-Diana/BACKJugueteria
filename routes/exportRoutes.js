@@ -18,10 +18,11 @@ const toCSV = (rows) => {
 
 function sendCSV(res, filename, rows) {
   const csv = toCSV(rows);
+  const bom = '\uFEFF';
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-  res.send(csv);
+  res.send(bom + csv);
 }
 
 function filtrarColumnas(rows, columnas) {
@@ -124,7 +125,7 @@ router.get('/clientes', async (req, res) => {
              mother_lastname AS 'Apellido Materno', email AS 'Email',
              phone AS 'Telefono', username AS 'Usuario',
              STATUS AS 'Estado',
-             DATE_FORMAT(CONVERT_TZ(created_at, '+00:00', '-06:00'), '%d/%m/%Y %H:%i') AS 'Fecha Registro'
+             DATE_FORMAT(CONVERT_TZ(created_at, '+00:00', '-06:00'), '%d/%m/%Y') AS 'Fecha Registro'
       FROM users
       WHERE role_id = 3
       ORDER BY first_name
