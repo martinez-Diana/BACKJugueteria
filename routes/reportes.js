@@ -26,7 +26,6 @@ function getRango(query) {
     return { desde: `${now.getFullYear()}-01-01`, hasta: fmt(now) };
   }
 
-  // default: mes actual
   return {
     desde: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`,
     hasta: fmt(now),
@@ -48,7 +47,6 @@ function getGroupFormat(periodo, campo = "fecha_venta") {
 }
 
 // ─── GET /api/reportes/ventas ─────────────────────────────────────────────────
-// Tabla: ventas — fecha_venta, total, estado ('completada')
 router.get("/ventas", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
@@ -63,7 +61,7 @@ router.get("/ventas", async (req, res) => {
        FROM ventas
        WHERE DATE(fecha_venta) BETWEEN ? AND ?
          AND estado = 'completada'
-       GROUP BY grp
+       GROUP BY grp, etiqueta
        ORDER BY grp ASC`,
       [desde, hasta]
     );
@@ -76,18 +74,15 @@ router.get("/ventas", async (req, res) => {
 });
 
 // ─── GET /api/reportes/productos ──────────────────────────────────────────────
-// Tablas: detalle_venta (id_venta, id_producto, cantidad, precio_unitario)
-//         productos (id_producto, nombre, categoria)
-//         ventas (id_venta, fecha_venta, estado)
 router.get("/productos", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
 
     const [productos] = await pool.query(
       `SELECT
-        dv.nombre_producto          AS nombre,
-        SUM(dv.cantidad)            AS cantidad,
-        SUM(dv.subtotal)            AS ingresos
+        dv.nombre_producto       AS nombre,
+        SUM(dv.cantidad)         AS cantidad,
+        SUM(dv.subtotal)         AS ingresos
        FROM detalle_venta dv
        JOIN ventas v ON v.id_venta = dv.id_venta
        WHERE DATE(v.fecha_venta) BETWEEN ? AND ?
@@ -120,7 +115,6 @@ router.get("/productos", async (req, res) => {
 });
 
 // ─── GET /api/reportes/clientes ───────────────────────────────────────────────
-// Tabla: users — rol = 3 para clientes, fecha_registro
 router.get("/clientes", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
@@ -155,7 +149,7 @@ router.get("/clientes", async (req, res) => {
        FROM usuarios
        WHERE rol = 3
          AND DATE(fecha_registro) BETWEEN ? AND ?
-       GROUP BY grp
+       GROUP BY grp, etiqueta
        ORDER BY grp ASC`,
       [desde, hasta]
     );
@@ -168,7 +162,6 @@ router.get("/clientes", async (req, res) => {
 });
 
 // ─── GET /api/reportes/inventario ─────────────────────────────────────────────
-// Tabla: productos — cantidad, precio, categoria, estado ('activo')
 router.get("/inventario", async (req, res) => {
   try {
     const [[{ total_productos, valor_total }]] = await pool.query(
@@ -231,8 +224,6 @@ router.get("/inventario", async (req, res) => {
 });
 
 // ─── GET /api/reportes/apartados ──────────────────────────────────────────────
-// Tabla: apartados — fecha_apartado, estado ('activo','liquidado','cancelado')
-//                    total_abonado, anticipo
 router.get("/apartados", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
@@ -273,15 +264,14 @@ router.get("/apartados", async (req, res) => {
       [desde, hasta]
     );
 
-    // Serie de abonos por período usando total_abonado de apartados
     const [serie_abonos] = await pool.query(
       `SELECT
-        ${groupBy} AS grp,
-        ${label}   AS etiqueta,
+        ${groupBy}         AS grp,
+        ${label}           AS etiqueta,
         SUM(total_abonado) AS monto
        FROM apartados
        WHERE DATE(fecha_apartado) BETWEEN ? AND ?
-       GROUP BY grp
+       GROUP BY grp, etiqueta
        ORDER BY grp ASC`,
       [desde, hasta]
     );
