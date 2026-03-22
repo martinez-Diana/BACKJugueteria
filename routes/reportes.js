@@ -118,15 +118,15 @@ router.get("/productos", async (req, res) => {
 router.get("/clientes", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
-    const { groupBy, label } = getGroupFormat(req.query.periodo, "fecha_registro");
+    const { groupBy, label } = getGroupFormat(req.query.periodo, "created_at");
 
     const [[{ total }]] = await pool.query(
-      `SELECT COUNT(*) AS total FROM usuarios WHERE rol = 3`
+      `SELECT COUNT(*) AS total FROM users WHERE role_id = 3`
     );
 
     const [[{ nuevos }]] = await pool.query(
-      `SELECT COUNT(*) AS nuevos FROM usuarios
-       WHERE rol = 3 AND DATE(fecha_registro) BETWEEN ? AND ?`,
+      `SELECT COUNT(*) AS nuevos FROM users
+       WHERE role_id = 3 AND DATE(created_at) BETWEEN ? AND ?`,
       [desde, hasta]
     );
 
@@ -146,9 +146,9 @@ router.get("/clientes", async (req, res) => {
         ${groupBy} AS grp,
         ${label}   AS etiqueta,
         COUNT(*)   AS nuevos
-       FROM usuarios
-       WHERE rol = 3
-         AND DATE(fecha_registro) BETWEEN ? AND ?
+       FROM users
+       WHERE role_id = 3
+         AND DATE(created_at) BETWEEN ? AND ?
        GROUP BY grp, etiqueta
        ORDER BY grp ASC`,
       [desde, hasta]
