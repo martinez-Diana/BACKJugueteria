@@ -1,9 +1,25 @@
 import express from "express";
 import pool from "../config/db.js";
 import logger from "../utils/logger.js";
-const CTX = "ProductosService";
+import multer from "multer";
+import csv from "csv-parser";
+import { PassThrough } from "stream";
 
+const CTX = "ProductosService";
 const router = express.Router();
+
+// Multer en memoria (compatible con Vercel)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === "text/csv" || file.originalname.endsWith(".csv")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Solo se permiten archivos CSV"));
+    }
+  },
+});
 
 // ==========================================
 // 📦 RUTA 1: OBTENER TODOS LOS PRODUCTOS
@@ -46,11 +62,11 @@ router.get("/:id", async (req, res) => {
     const [productos] = await pool.query(query, [id]);
 
     if (productos.length === 0) {
-  logger.warn(`Producto no encontrado con ID: ${id}`, { context: CTX, id });
-  return res.status(404).json({ 
-    error: "Producto no encontrado" 
-  });
-}
+      logger.warn(`Producto no encontrado con ID: ${id}`, { context: CTX, id });
+      return res.status(404).json({ 
+        error: "Producto no encontrado" 
+      });
+    }
 
     logger.info(`Producto encontrado: ${productos[0].nombre}`, { context: CTX });
 
@@ -64,6 +80,7 @@ router.get("/:id", async (req, res) => {
     });
   }
 });
+
 // ==========================================
 // ➕ RUTA 3: CREAR NUEVO PRODUCTO
 // ==========================================
@@ -79,16 +96,14 @@ router.post("/", async (req, res) => {
       precio, precio_compra
     } = req.body;
 
-    // ✅ Validaciones básicas
     if (!nombre || !sku || !categoria || !genero) {
-  logger.warn("Faltan campos obligatorios al crear producto", { context: CTX });
-  return res.status(400).json({
-    error: "Faltan campos obligatorios",
-    requeridos: ["nombre", "sku", "categoria", "genero"]
-  });
-}
+      logger.warn("Faltan campos obligatorios al crear producto", { context: CTX });
+      return res.status(400).json({
+        error: "Faltan campos obligatorios",
+        requeridos: ["nombre", "sku", "categoria", "genero"]
+      });
+    }
 
-    // ✅ Verificar que el SKU no exista
     const [skuExiste] = await pool.query(
       'SELECT id_producto FROM productos WHERE sku = ?',
       [sku]
@@ -100,7 +115,6 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // ✅ Insertar producto
     const query = `
       INSERT INTO productos (
         nombre, descripcion, categoria, marca, material,
@@ -154,7 +168,6 @@ router.get("/stats/inventario", async (req, res) => {
   try {
     console.log("📊 GET /api/productos/stats/inventario - Obteniendo estadísticas...");
 
-    // Estadísticas generales
     const [stats] = await pool.query(`
       SELECT 
         COUNT(*) as total_productos,
@@ -166,7 +179,6 @@ router.get("/stats/inventario", async (req, res) => {
       WHERE estado = 'activo'
     `);
 
-    // Distribución por categorías
     const [categorias] = await pool.query(`
       SELECT 
         categoria,
@@ -178,7 +190,6 @@ router.get("/stats/inventario", async (req, res) => {
       ORDER BY cantidad_productos DESC
     `);
 
-    // Productos con stock bajo
     const [stockBajo] = await pool.query(`
       SELECT 
         id_producto,
@@ -211,7 +222,9 @@ router.get("/stats/inventario", async (req, res) => {
   }
 });
 
-// ==================== PUT - ACTUALIZAR PRODUCTO COMPLETO ====================
+// ==========================================
+// ✏️ RUTA: ACTUALIZAR PRODUCTO
+// ==========================================
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -224,7 +237,6 @@ router.put("/:id", async (req, res) => {
 
     logger.info(`Iniciando actualización de producto ID: ${id}`, { context: CTX, id });
 
-    // Verificar que el producto existe
     const [productoExiste] = await pool.query(
       'SELECT * FROM productos WHERE id_producto = ?',
       [id]
@@ -234,7 +246,6 @@ router.put("/:id", async (req, res) => {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
-    // Verificar que el SKU no esté duplicado (excepto el mismo producto)
     if (sku) {
       const [skuDuplicado] = await pool.query(
         'SELECT id_producto FROM productos WHERE sku = ? AND id_producto != ?',
@@ -248,7 +259,6 @@ router.put("/:id", async (req, res) => {
       }
     }
 
-    // Actualizar producto
     await pool.query(
       `UPDATE productos SET 
         nombre = ?,
@@ -292,7 +302,9 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// ==================== DELETE - DESACTIVAR PRODUCTO (SOFT DELETE) ====================
+// ==========================================
+// 🗑️ RUTA: DESACTIVAR PRODUCTO (SOFT DELETE)
+// ==========================================
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -305,9 +317,9 @@ router.delete("/:id", async (req, res) => {
     );
 
     if (productoExiste.length === 0) {
-  logger.warn(`Producto no encontrado al eliminar ID: ${id}`, { context: CTX, id });
-  return res.status(404).json({ error: 'Producto no encontrado' });
-}
+      logger.warn(`Producto no encontrado al eliminar ID: ${id}`, { context: CTX, id });
+      return res.status(404).json({ error: 'Producto no encontrado' });
+    }
 
     await pool.query(
       'UPDATE productos SET estado = "inactivo" WHERE id_producto = ?',
@@ -330,6 +342,134 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+// ==========================================
+// 📂 RUTA: IMPORTAR PRODUCTOS DESDE CSV
+// ==========================================
+// Columnas esperadas:
+//   nombre, categoria, precio_compra, precio, cantidad,
+//   descripcion (opcional), marca (opcional), sku (opcional), genero (opcional)
+//
+// - Si el SKU ya existe  → actualiza el producto
+// - Si no existe         → inserta nuevo
+// ==========================================
+router.post("/importar", upload.single("archivo"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No se recibió ningún archivo CSV" });
+  }
+
+  const filas = [];
+  const errores = [];
+
+  try {
+    await new Promise((resolve, reject) => {
+      const bufferStream = new PassThrough();
+      bufferStream.end(req.file.buffer);
+      bufferStream
+        .pipe(csv({ mapHeaders: ({ header }) => header.trim().toLowerCase() }))
+        .on("data", (row) => filas.push(row))
+        .on("end", resolve)
+        .on("error", reject);
+    });
+
+    if (filas.length === 0) {
+      return res.status(400).json({ error: "El CSV está vacío o sin formato correcto" });
+    }
+
+    let insertados = 0;
+    let actualizados = 0;
+
+    for (let i = 0; i < filas.length; i++) {
+      const fila = filas[i];
+      const numFila = i + 2;
+
+      try {
+        const nombre       = fila["nombre"]?.trim();
+        const categoria    = fila["categoria"]?.trim() || null;
+        const precio       = parseFloat(fila["precio"]);
+        const precioCompra = parseFloat(fila["precio_compra"]) || 0;
+        const cantidad     = parseInt(fila["cantidad"], 10);
+        const descripcion  = fila["descripcion"]?.trim() || null;
+        const marca        = fila["marca"]?.trim() || null;
+        const skuCSV       = fila["sku"]?.trim() || null;
+        const genero       = fila["genero"]?.trim() || "Unisex";
+
+        if (!nombre) {
+          errores.push({ fila: numFila, error: 'El campo "nombre" es obligatorio' });
+          continue;
+        }
+        if (isNaN(precio) || precio < 0) {
+          errores.push({ fila: numFila, nombre, error: '"precio" inválido' });
+          continue;
+        }
+        if (isNaN(cantidad) || cantidad < 0) {
+          errores.push({ fila: numFila, nombre, error: '"cantidad" inválido' });
+          continue;
+        }
+
+        // Buscar si ya existe por SKU o por nombre
+        let existe = null;
+
+        if (skuCSV) {
+          const [porSku] = await pool.query(
+            "SELECT id_producto FROM productos WHERE sku = ? LIMIT 1",
+            [skuCSV]
+          );
+          if (porSku.length > 0) existe = porSku[0];
+        }
+
+        if (!existe) {
+          const [porNombre] = await pool.query(
+            "SELECT id_producto FROM productos WHERE LOWER(nombre) = LOWER(?) LIMIT 1",
+            [nombre]
+          );
+          if (porNombre.length > 0) existe = porNombre[0];
+        }
+
+        if (existe) {
+          await pool.query(
+            `UPDATE productos SET
+               categoria     = COALESCE(?, categoria),
+               precio        = ?,
+               precio_compra = ?,
+               cantidad      = ?,
+               descripcion   = COALESCE(?, descripcion),
+               marca         = COALESCE(?, marca),
+               genero        = ?
+             WHERE id_producto = ?`,
+            [categoria, precio, precioCompra, cantidad, descripcion, marca, genero, existe.id_producto]
+          );
+          actualizados++;
+        } else {
+          const skuFinal = skuCSV || `IMP-${Date.now()}-${i}`;
+          await pool.query(
+            `INSERT INTO productos
+               (nombre, descripcion, categoria, marca, genero,
+                sku, cantidad, precio, precio_compra, estado)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo')`,
+            [nombre, descripcion, categoria, marca, genero,
+             skuFinal, cantidad, precio, precioCompra]
+          );
+          insertados++;
+        }
+
+      } catch (err) {
+        errores.push({ fila: numFila, nombre: fila["nombre"] || "?", error: err.message });
+      }
+    }
+
+    res.json({
+      ok: true,
+      total:         filas.length,
+      insertados,
+      actualizados,
+      errores_count: errores.length,
+      errores,
+    });
+
+  } catch (err) {
+    logger.error("Error al importar productos CSV", { context: CTX, error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
-
-
