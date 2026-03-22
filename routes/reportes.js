@@ -1,10 +1,7 @@
-// routes/reportes.js
-// Agregar en tu index.js/app.js:  app.use('/api/reportes', require('./routes/reportes'));
+import express from "express";
+import pool from "../config/db.js";
 
-const express = require("express");
 const router = express.Router();
-const db = require("../db"); // ajusta según tu conexión MySQL (pool.promise())
-const { verifyToken } = require("../middleware/auth"); // ajusta según tu middleware
 
 // ─── Helper: calcular rango de fechas ────────────────────────────────────────
 function getRango(query) {
@@ -25,45 +22,43 @@ function getRango(query) {
     return { desde: fmt(from), hasta: fmt(now) };
   }
 
-  if (periodo === "mes") {
-    return {
-      desde: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`,
-      hasta: fmt(now),
-    };
-  }
-
   if (periodo === "year") {
     return { desde: `${now.getFullYear()}-01-01`, hasta: fmt(now) };
   }
 
-  // fallback: mes actual
+  // default: mes actual
   return {
     desde: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`,
     hasta: fmt(now),
   };
 }
 
-// ─── Helper: etiqueta por período ────────────────────────────────────────────
+// ─── Helper: formato de agrupación ───────────────────────────────────────────
 function getGroupFormat(periodo) {
-  if (periodo === "year") return { groupBy: "DATE_FORMAT(fecha, '%Y-%m')", label: "DATE_FORMAT(fecha, '%b %Y')" };
-  if (periodo === "semana") return { groupBy: "DATE(fecha)", label: "DATE_FORMAT(fecha, '%d %b')" };
-  return { groupBy: "DATE(fecha)", label: "DATE_FORMAT(fecha, '%d %b')" };
+  if (periodo === "year") {
+    return {
+      groupBy: "DATE_FORMAT(fecha, '%Y-%m')",
+      label: "DATE_FORMAT(fecha, '%b %Y')",
+    };
+  }
+  return {
+    groupBy: "DATE(fecha)",
+    label: "DATE_FORMAT(fecha, '%d %b')",
+  };
 }
 
 // ─── GET /api/reportes/ventas ─────────────────────────────────────────────────
-// Query params: periodo (semana|mes|year|custom), desde, hasta
-router.get("/ventas", verifyToken, async (req, res) => {
+router.get("/ventas", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
     const { groupBy, label } = getGroupFormat(req.query.periodo);
 
-    // Serie temporal de ventas
-    const [serie] = await db.query(
+    const [serie] = await pool.query(
       `SELECT
-        ${groupBy}            AS grp,
-        ${label}              AS etiqueta,
-        COUNT(*)              AS cantidad,
-        COALESCE(SUM(total), 0) AS total
+        ${groupBy}               AS grp,
+        ${label}                 AS etiqueta,
+        COUNT(*)                 AS cantidad,
+        COALESCE(SUM(total), 0)  AS total
        FROM ventas
        WHERE DATE(fecha) BETWEEN ? AND ?
          AND estado != 'cancelada'
@@ -80,19 +75,18 @@ router.get("/ventas", verifyToken, async (req, res) => {
 });
 
 // ─── GET /api/reportes/productos ──────────────────────────────────────────────
-router.get("/productos", verifyToken, async (req, res) => {
+router.get("/productos", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
 
-    // Top 10 productos más vendidos
-    const [productos] = await db.query(
+    const [productos] = await pool.query(
       `SELECT
         p.nombre,
-        SUM(dv.cantidad)          AS cantidad,
-        SUM(dv.cantidad * dv.precio_unitario) AS ingresos
+        SUM(dv.cantidad)                          AS cantidad,
+        SUM(dv.cantidad * dv.precio_unitario)     AS ingresos
        FROM detalle_ventas dv
        JOIN productos p ON p.id_producto = dv.id_producto
-       JOIN ventas v    ON v.id_venta = dv.id_venta
+       JOIN ventas    v ON v.id_venta    = dv.id_venta
        WHERE DATE(v.fecha) BETWEEN ? AND ?
          AND v.estado != 'cancelada'
        GROUP BY dv.id_producto, p.nombre
@@ -101,18 +95,16 @@ router.get("/productos", verifyToken, async (req, res) => {
       [desde, hasta]
     );
 
-    // Ventas agrupadas por categoría
-    const [categorias] = await db.query(
+    const [categorias] = await pool.query(
       `SELECT
-        c.nombre_categoria AS nombre,
+        p.categoria        AS nombre,
         SUM(dv.cantidad)   AS valor
        FROM detalle_ventas dv
-       JOIN productos  p ON p.id_producto = dv.id_producto
-       JOIN categorias c ON c.id_categoria = p.id_categoria
-       JOIN ventas     v ON v.id_venta = dv.id_venta
+       JOIN productos p ON p.id_producto = dv.id_producto
+       JOIN ventas    v ON v.id_venta    = dv.id_venta
        WHERE DATE(v.fecha) BETWEEN ? AND ?
          AND v.estado != 'cancelada'
-       GROUP BY c.id_categoria, c.nombre_categoria
+       GROUP BY p.categoria
        ORDER BY valor DESC`,
       [desde, hasta]
     );
@@ -125,41 +117,43 @@ router.get("/productos", verifyToken, async (req, res) => {
 });
 
 // ─── GET /api/reportes/clientes ───────────────────────────────────────────────
-router.get("/clientes", verifyToken, async (req, res) => {
+router.get("/clientes", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
     const { groupBy, label } = getGroupFormat(req.query.periodo);
 
-    // Totales
-    const [[{ total }]] = await db.query(
-      `SELECT COUNT(*) AS total FROM clientes WHERE activo = 1`
+    const [[{ total }]] = await pool.query(
+      `SELECT COUNT(*) AS total FROM usuarios WHERE rol = 3`
     );
 
-    const [[{ nuevos }]] = await db.query(
-      `SELECT COUNT(*) AS nuevos FROM clientes
-       WHERE DATE(fecha_registro) BETWEEN ? AND ?`,
+    const [[{ nuevos }]] = await pool.query(
+      `SELECT COUNT(*) AS nuevos FROM usuarios
+       WHERE rol = 3 AND DATE(fecha_registro) BETWEEN ? AND ?`,
       [desde, hasta]
     );
 
-    // Clientes que compraron más de una vez en el período
-    const [[{ recurrentes }]] = await db.query(
+    const [[{ recurrentes }]] = await pool.query(
       `SELECT COUNT(*) AS recurrentes FROM (
          SELECT id_cliente FROM ventas
-         WHERE DATE(fecha) BETWEEN ? AND ? AND estado != 'cancelada'
+         WHERE DATE(fecha) BETWEEN ? AND ?
+           AND estado != 'cancelada'
            AND id_cliente IS NOT NULL
          GROUP BY id_cliente HAVING COUNT(*) > 1
        ) t`,
       [desde, hasta]
     );
 
-    // Serie nuevos clientes
-    const [serie] = await db.query(
+    const grupoReg = groupBy.replace(/fecha/g, "fecha_registro");
+    const labelReg = label.replace(/fecha/g, "fecha_registro");
+
+    const [serie] = await pool.query(
       `SELECT
-        ${groupBy.replace(/fecha/g, "fecha_registro")} AS grp,
-        ${label.replace(/fecha/g, "fecha_registro")}   AS etiqueta,
-        COUNT(*) AS nuevos
-       FROM clientes
-       WHERE DATE(fecha_registro) BETWEEN ? AND ?
+        ${grupoReg} AS grp,
+        ${labelReg} AS etiqueta,
+        COUNT(*)    AS nuevos
+       FROM usuarios
+       WHERE rol = 3
+         AND DATE(fecha_registro) BETWEEN ? AND ?
        GROUP BY grp
        ORDER BY grp ASC`,
       [desde, hasta]
@@ -173,52 +167,60 @@ router.get("/clientes", verifyToken, async (req, res) => {
 });
 
 // ─── GET /api/reportes/inventario ─────────────────────────────────────────────
-router.get("/inventario", verifyToken, async (req, res) => {
+router.get("/inventario", async (req, res) => {
   try {
-    // Totales globales
-    const [[{ total_productos, valor_total }]] = await db.query(
+    const [[{ total_productos, valor_total }]] = await pool.query(
       `SELECT
-        COUNT(*)                        AS total_productos,
-        SUM(stock * precio_venta)       AS valor_total
+        COUNT(*)               AS total_productos,
+        SUM(cantidad * precio) AS valor_total
        FROM productos
-       WHERE activo = 1`
+       WHERE estado = 'activo'`
     );
 
-    const [[{ count_bajo }]] = await db.query(
-      `SELECT COUNT(*) AS count_bajo FROM productos WHERE activo = 1 AND stock > 0 AND stock <= 5`
+    const [[{ count_bajo }]] = await pool.query(
+      `SELECT COUNT(*) AS count_bajo
+       FROM productos
+       WHERE estado = 'activo' AND cantidad > 0 AND cantidad <= 5`
     );
 
-    const [[{ count_agotado }]] = await db.query(
-      `SELECT COUNT(*) AS count_agotado FROM productos WHERE activo = 1 AND stock = 0`
+    const [[{ count_agotado }]] = await pool.query(
+      `SELECT COUNT(*) AS count_agotado
+       FROM productos
+       WHERE estado = 'activo' AND cantidad = 0`
     );
 
-    // Stock por categoría
-    const [categorias] = await db.query(
+    const [categorias] = await pool.query(
       `SELECT
-        c.nombre_categoria AS nombre,
-        SUM(p.stock)       AS stock
-       FROM productos p
-       JOIN categorias c ON c.id_categoria = p.id_categoria
-       WHERE p.activo = 1
-       GROUP BY c.id_categoria, c.nombre_categoria
+        categoria      AS nombre,
+        SUM(cantidad)  AS stock
+       FROM productos
+       WHERE estado = 'activo'
+       GROUP BY categoria
        ORDER BY stock DESC`
     );
 
-    // Productos agotados
-    const [agotados] = await db.query(
-      `SELECT nombre FROM productos WHERE activo = 1 AND stock = 0 LIMIT 20`
+    const [agotados] = await pool.query(
+      `SELECT nombre FROM productos
+       WHERE estado = 'activo' AND cantidad = 0
+       LIMIT 20`
     );
 
-    // Productos con stock bajo (1-5)
-    const [bajo_stock] = await db.query(
-      `SELECT nombre, stock FROM productos
-       WHERE activo = 1 AND stock > 0 AND stock <= 5
-       ORDER BY stock ASC LIMIT 20`
+    const [bajo_stock] = await pool.query(
+      `SELECT nombre, cantidad AS stock
+       FROM productos
+       WHERE estado = 'activo' AND cantidad > 0 AND cantidad <= 5
+       ORDER BY cantidad ASC
+       LIMIT 20`
     );
 
     res.json({
-      total_productos, valor_total, count_bajo, count_agotado,
-      categorias, agotados, bajo_stock
+      total_productos,
+      valor_total,
+      count_bajo,
+      count_agotado,
+      categorias,
+      agotados,
+      bajo_stock,
     });
   } catch (err) {
     console.error("reportes/inventario:", err);
@@ -227,38 +229,39 @@ router.get("/inventario", verifyToken, async (req, res) => {
 });
 
 // ─── GET /api/reportes/apartados ──────────────────────────────────────────────
-router.get("/apartados", verifyToken, async (req, res) => {
+router.get("/apartados", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
     const { groupBy, label } = getGroupFormat(req.query.periodo);
 
-    // Totales
-    const [[{ total }]] = await db.query(
+    const [[{ total }]] = await pool.query(
       `SELECT COUNT(*) AS total FROM apartados
        WHERE DATE(fecha_creacion) BETWEEN ? AND ?`,
       [desde, hasta]
     );
 
-    const [[{ completados }]] = await db.query(
+    const [[{ completados }]] = await pool.query(
       `SELECT COUNT(*) AS completados FROM apartados
-       WHERE estado = 'completado' AND DATE(fecha_creacion) BETWEEN ? AND ?`,
+       WHERE estado = 'completado'
+         AND DATE(fecha_creacion) BETWEEN ? AND ?`,
       [desde, hasta]
     );
 
-    const [[{ pendientes }]] = await db.query(
+    const [[{ pendientes }]] = await pool.query(
       `SELECT COUNT(*) AS pendientes FROM apartados
-       WHERE estado IN ('activo','pendiente') AND DATE(fecha_creacion) BETWEEN ? AND ?`,
+       WHERE estado IN ('activo','pendiente')
+         AND DATE(fecha_creacion) BETWEEN ? AND ?`,
       [desde, hasta]
     );
 
-    const [[{ ingresos }]] = await db.query(
-      `SELECT COALESCE(SUM(monto), 0) AS ingresos FROM abonos_apartado
+    const [[{ ingresos }]] = await pool.query(
+      `SELECT COALESCE(SUM(monto), 0) AS ingresos
+       FROM abonos_apartado
        WHERE DATE(fecha_abono) BETWEEN ? AND ?`,
       [desde, hasta]
     );
 
-    // Distribución por estado
-    const [estados] = await db.query(
+    const [estados] = await pool.query(
       `SELECT estado AS nombre, COUNT(*) AS valor
        FROM apartados
        WHERE DATE(fecha_creacion) BETWEEN ? AND ?
@@ -266,12 +269,14 @@ router.get("/apartados", verifyToken, async (req, res) => {
       [desde, hasta]
     );
 
-    // Serie de abonos por período
-    const [serie_abonos] = await db.query(
+    const grupoAbono = groupBy.replace(/fecha/g, "fecha_abono");
+    const labelAbono = label.replace(/fecha/g, "fecha_abono");
+
+    const [serie_abonos] = await pool.query(
       `SELECT
-        ${groupBy.replace(/fecha/g, "fecha_abono")} AS grp,
-        ${label.replace(/fecha/g, "fecha_abono")}   AS etiqueta,
-        SUM(monto) AS monto
+        ${grupoAbono} AS grp,
+        ${labelAbono} AS etiqueta,
+        SUM(monto)    AS monto
        FROM abonos_apartado
        WHERE DATE(fecha_abono) BETWEEN ? AND ?
        GROUP BY grp
@@ -279,11 +284,20 @@ router.get("/apartados", verifyToken, async (req, res) => {
       [desde, hasta]
     );
 
-    res.json({ total, completados, pendientes, ingresos, estados, serie_abonos, desde, hasta });
+    res.json({
+      total,
+      completados,
+      pendientes,
+      ingresos,
+      estados,
+      serie_abonos,
+      desde,
+      hasta,
+    });
   } catch (err) {
     console.error("reportes/apartados:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-module.exports = router;
+export default router;
