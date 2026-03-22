@@ -34,24 +34,25 @@ function getRango(query) {
 }
 
 // ─── Helper: formato de agrupación ───────────────────────────────────────────
-function getGroupFormat(periodo) {
+function getGroupFormat(periodo, campo = "fecha_venta") {
   if (periodo === "year") {
     return {
-      groupBy: "DATE_FORMAT(fecha, '%Y-%m')",
-      label: "DATE_FORMAT(fecha, '%b %Y')",
+      groupBy: `DATE_FORMAT(${campo}, '%Y-%m')`,
+      label:   `DATE_FORMAT(${campo}, '%b %Y')`,
     };
   }
   return {
-    groupBy: "DATE(fecha)",
-    label: "DATE_FORMAT(fecha, '%d %b')",
+    groupBy: `DATE(${campo})`,
+    label:   `DATE_FORMAT(${campo}, '%d %b')`,
   };
 }
 
 // ─── GET /api/reportes/ventas ─────────────────────────────────────────────────
+// Tabla: ventas — fecha_venta, total, estado ('completada')
 router.get("/ventas", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
-    const { groupBy, label } = getGroupFormat(req.query.periodo);
+    const { groupBy, label } = getGroupFormat(req.query.periodo, "fecha_venta");
 
     const [serie] = await pool.query(
       `SELECT
@@ -60,8 +61,8 @@ router.get("/ventas", async (req, res) => {
         COUNT(*)                 AS cantidad,
         COALESCE(SUM(total), 0)  AS total
        FROM ventas
-       WHERE DATE(fecha) BETWEEN ? AND ?
-         AND estado != 'cancelada'
+       WHERE DATE(fecha_venta) BETWEEN ? AND ?
+         AND estado = 'completada'
        GROUP BY grp
        ORDER BY grp ASC`,
       [desde, hasta]
@@ -75,21 +76,23 @@ router.get("/ventas", async (req, res) => {
 });
 
 // ─── GET /api/reportes/productos ──────────────────────────────────────────────
+// Tablas: detalle_venta (id_venta, id_producto, cantidad, precio_unitario)
+//         productos (id_producto, nombre, categoria)
+//         ventas (id_venta, fecha_venta, estado)
 router.get("/productos", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
 
     const [productos] = await pool.query(
       `SELECT
-        p.nombre,
-        SUM(dv.cantidad)                          AS cantidad,
-        SUM(dv.cantidad * dv.precio_unitario)     AS ingresos
-       FROM detalle_ventas dv
-       JOIN productos p ON p.id_producto = dv.id_producto
-       JOIN ventas    v ON v.id_venta    = dv.id_venta
-       WHERE DATE(v.fecha) BETWEEN ? AND ?
-         AND v.estado != 'cancelada'
-       GROUP BY dv.id_producto, p.nombre
+        dv.nombre_producto          AS nombre,
+        SUM(dv.cantidad)            AS cantidad,
+        SUM(dv.subtotal)            AS ingresos
+       FROM detalle_venta dv
+       JOIN ventas v ON v.id_venta = dv.id_venta
+       WHERE DATE(v.fecha_venta) BETWEEN ? AND ?
+         AND v.estado = 'completada'
+       GROUP BY dv.nombre_producto
        ORDER BY cantidad DESC
        LIMIT 10`,
       [desde, hasta]
@@ -99,11 +102,11 @@ router.get("/productos", async (req, res) => {
       `SELECT
         p.categoria        AS nombre,
         SUM(dv.cantidad)   AS valor
-       FROM detalle_ventas dv
+       FROM detalle_venta dv
        JOIN productos p ON p.id_producto = dv.id_producto
        JOIN ventas    v ON v.id_venta    = dv.id_venta
-       WHERE DATE(v.fecha) BETWEEN ? AND ?
-         AND v.estado != 'cancelada'
+       WHERE DATE(v.fecha_venta) BETWEEN ? AND ?
+         AND v.estado = 'completada'
        GROUP BY p.categoria
        ORDER BY valor DESC`,
       [desde, hasta]
@@ -117,10 +120,11 @@ router.get("/productos", async (req, res) => {
 });
 
 // ─── GET /api/reportes/clientes ───────────────────────────────────────────────
+// Tabla: users — rol = 3 para clientes, fecha_registro
 router.get("/clientes", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
-    const { groupBy, label } = getGroupFormat(req.query.periodo);
+    const { groupBy, label } = getGroupFormat(req.query.periodo, "fecha_registro");
 
     const [[{ total }]] = await pool.query(
       `SELECT COUNT(*) AS total FROM usuarios WHERE rol = 3`
@@ -134,23 +138,20 @@ router.get("/clientes", async (req, res) => {
 
     const [[{ recurrentes }]] = await pool.query(
       `SELECT COUNT(*) AS recurrentes FROM (
-         SELECT id_cliente FROM ventas
-         WHERE DATE(fecha) BETWEEN ? AND ?
-           AND estado != 'cancelada'
-           AND id_cliente IS NOT NULL
-         GROUP BY id_cliente HAVING COUNT(*) > 1
+         SELECT id_usuario FROM ventas
+         WHERE DATE(fecha_venta) BETWEEN ? AND ?
+           AND estado = 'completada'
+           AND id_usuario IS NOT NULL
+         GROUP BY id_usuario HAVING COUNT(*) > 1
        ) t`,
       [desde, hasta]
     );
 
-    const grupoReg = groupBy.replace(/fecha/g, "fecha_registro");
-    const labelReg = label.replace(/fecha/g, "fecha_registro");
-
     const [serie] = await pool.query(
       `SELECT
-        ${grupoReg} AS grp,
-        ${labelReg} AS etiqueta,
-        COUNT(*)    AS nuevos
+        ${groupBy} AS grp,
+        ${label}   AS etiqueta,
+        COUNT(*)   AS nuevos
        FROM usuarios
        WHERE rol = 3
          AND DATE(fecha_registro) BETWEEN ? AND ?
@@ -167,6 +168,7 @@ router.get("/clientes", async (req, res) => {
 });
 
 // ─── GET /api/reportes/inventario ─────────────────────────────────────────────
+// Tabla: productos — cantidad, precio, categoria, estado ('activo')
 router.get("/inventario", async (req, res) => {
   try {
     const [[{ total_productos, valor_total }]] = await pool.query(
@@ -229,56 +231,56 @@ router.get("/inventario", async (req, res) => {
 });
 
 // ─── GET /api/reportes/apartados ──────────────────────────────────────────────
+// Tabla: apartados — fecha_apartado, estado ('activo','liquidado','cancelado')
+//                    total_abonado, anticipo
 router.get("/apartados", async (req, res) => {
   try {
     const { desde, hasta } = getRango(req.query);
-    const { groupBy, label } = getGroupFormat(req.query.periodo);
+    const { groupBy, label } = getGroupFormat(req.query.periodo, "fecha_apartado");
 
     const [[{ total }]] = await pool.query(
       `SELECT COUNT(*) AS total FROM apartados
-       WHERE DATE(fecha_creacion) BETWEEN ? AND ?`,
+       WHERE DATE(fecha_apartado) BETWEEN ? AND ?`,
       [desde, hasta]
     );
 
     const [[{ completados }]] = await pool.query(
       `SELECT COUNT(*) AS completados FROM apartados
-       WHERE estado = 'completado'
-         AND DATE(fecha_creacion) BETWEEN ? AND ?`,
+       WHERE estado = 'liquidado'
+         AND DATE(fecha_apartado) BETWEEN ? AND ?`,
       [desde, hasta]
     );
 
     const [[{ pendientes }]] = await pool.query(
       `SELECT COUNT(*) AS pendientes FROM apartados
-       WHERE estado IN ('activo','pendiente')
-         AND DATE(fecha_creacion) BETWEEN ? AND ?`,
+       WHERE estado = 'activo'
+         AND DATE(fecha_apartado) BETWEEN ? AND ?`,
       [desde, hasta]
     );
 
     const [[{ ingresos }]] = await pool.query(
-      `SELECT COALESCE(SUM(monto), 0) AS ingresos
-       FROM abonos_apartado
-       WHERE DATE(fecha_abono) BETWEEN ? AND ?`,
+      `SELECT COALESCE(SUM(total_abonado), 0) AS ingresos
+       FROM apartados
+       WHERE DATE(fecha_apartado) BETWEEN ? AND ?`,
       [desde, hasta]
     );
 
     const [estados] = await pool.query(
       `SELECT estado AS nombre, COUNT(*) AS valor
        FROM apartados
-       WHERE DATE(fecha_creacion) BETWEEN ? AND ?
+       WHERE DATE(fecha_apartado) BETWEEN ? AND ?
        GROUP BY estado`,
       [desde, hasta]
     );
 
-    const grupoAbono = groupBy.replace(/fecha/g, "fecha_abono");
-    const labelAbono = label.replace(/fecha/g, "fecha_abono");
-
+    // Serie de abonos por período usando total_abonado de apartados
     const [serie_abonos] = await pool.query(
       `SELECT
-        ${grupoAbono} AS grp,
-        ${labelAbono} AS etiqueta,
-        SUM(monto)    AS monto
-       FROM abonos_apartado
-       WHERE DATE(fecha_abono) BETWEEN ? AND ?
+        ${groupBy} AS grp,
+        ${label}   AS etiqueta,
+        SUM(total_abonado) AS monto
+       FROM apartados
+       WHERE DATE(fecha_apartado) BETWEEN ? AND ?
        GROUP BY grp
        ORDER BY grp ASC`,
       [desde, hasta]
