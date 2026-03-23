@@ -472,4 +472,61 @@ router.post("/importar", upload.single("archivo"), async (req, res) => {
   }
 });
 
+// ==========================================
+// 📦 RUTA: IMPORTAR INVENTARIO DESDE CSV
+// ==========================================
+router.post("/importar-inventario", upload.single("archivo"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No se recibió ningún archivo CSV" });
+
+  const filas = [];
+  const errores = [];
+
+  try {
+    await new Promise((resolve, reject) => {
+      const bufferStream = new PassThrough();
+      bufferStream.end(req.file.buffer);
+      bufferStream
+        .pipe(csv({ mapHeaders: ({ header }) => header.trim().toLowerCase() }))
+        .on("data", (row) => filas.push(row))
+        .on("end", resolve)
+        .on("error", reject);
+    });
+
+    if (filas.length === 0) return res.status(400).json({ error: "El CSV está vacío" });
+
+    let actualizados = 0;
+    let noEncontrados = 0;
+
+    for (let i = 0; i < filas.length; i++) {
+      const fila = filas[i];
+      const numFila = i + 2;
+      try {
+        const sku      = fila["sku"]?.trim();
+        const cantidad = parseInt(fila["cantidad"], 10);
+
+        if (!sku) { errores.push({ fila: numFila, error: 'El campo "sku" es obligatorio' }); continue; }
+        if (isNaN(cantidad) || cantidad < 0) { errores.push({ fila: numFila, sku, error: '"cantidad" inválida' }); continue; }
+
+        const [rows] = await pool.query("SELECT id_producto FROM productos WHERE sku = ? LIMIT 1", [sku]);
+
+        if (rows.length === 0) {
+          errores.push({ fila: numFila, sku, error: `SKU "${sku}" no encontrado` });
+          noEncontrados++;
+          continue;
+        }
+
+        await pool.query("UPDATE productos SET cantidad = ? WHERE sku = ?", [cantidad, sku]);
+        actualizados++;
+      } catch (err) {
+        errores.push({ fila: numFila, sku: fila["sku"] || "?", error: err.message });
+      }
+    }
+
+    res.json({ ok: true, total: filas.length, actualizados, no_encontrados: noEncontrados, errores_count: errores.length, errores });
+  } catch (err) {
+    logger.error("Error al importar inventario CSV", { context: CTX, error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
