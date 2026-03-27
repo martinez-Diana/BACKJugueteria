@@ -138,4 +138,42 @@ router.get('/clientes', async (req, res) => {
   }
 });
 
+router.get('/apartados', async (req, res) => {
+  try {
+    const { estado, columnas } = req.query;
+    let where = 'WHERE 1=1';
+    const params = [];
+
+    if (estado) { where += ' AND a.estado = ?'; params.push(estado); }
+
+    const [rows] = await pool.query(`
+      SELECT 
+        a.id_apartado AS 'ID',
+        CONCAT(u.first_name, ' ', u.last_name) AS 'Cliente',
+        u.email AS 'Email',
+        p.nombre AS 'Producto',
+        p.sku AS 'SKU',
+        a.precio_total AS 'Precio Total',
+        a.anticipo AS 'Anticipo',
+        a.total_abonado AS 'Total Abonado',
+        a.saldo_pendiente AS 'Saldo Pendiente',
+        a.estado AS 'Estado',
+        DATE_FORMAT(CONVERT_TZ(a.fecha_apartado, '+00:00', '-06:00'), '%d/%m/%Y') AS 'Fecha Apartado',
+        DATE_FORMAT(CONVERT_TZ(a.fecha_limite, '+00:00', '-06:00'), '%d/%m/%Y') AS 'Fecha Limite',
+        a.notas AS 'Notas'
+      FROM apartados a
+      JOIN users u ON a.id_usuario = u.id
+      JOIN productos p ON a.id_producto = p.id_producto
+      ${where}
+      ORDER BY a.fecha_apartado DESC
+    `, params);
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    sendCSV(res, `apartados_${fecha}.csv`, filtrarColumnas(rows, columnas));
+  } catch (error) {
+    console.error('Error exportar apartados:', error);
+    res.status(500).json({ error: 'Error al exportar apartados' });
+  }
+});
+
 export default router;
