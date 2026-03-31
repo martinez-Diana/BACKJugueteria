@@ -70,19 +70,20 @@ router.get("/:id", async (req, res) => {
     logger.info(`Buscando cliente con ID: ${id}`, { context: CTX, id });
 
     const query = `
-      SELECT 
-        id,
-        first_name,
-        last_name,
-        mother_lastname,
-        email,
-        phone,
-        username,
-        role_id,
-        created_at
-      FROM users 
-      WHERE id = ?
-    `;
+  SELECT 
+    id,
+    first_name,
+    last_name,
+    mother_lastname,
+    email,
+    phone,
+    username,
+    role_id,
+    birthdate,
+    created_at
+  FROM users 
+  WHERE id = ?
+`;
     
     const [clientes] = await pool.query(query, [id]);
 
