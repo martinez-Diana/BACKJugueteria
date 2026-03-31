@@ -346,123 +346,48 @@ router.get("/stats/resumen", async (req, res) => {
   }
 });
 
-// 📋 Obtener compras de un cliente específico (para su perfil)
+// 📋 Mis compras del cliente (perfil)
 router.get('/mis-compras/:clienteId', async (req, res) => {
   try {
     const { clienteId } = req.params;
 
-    // Obtener ventas del cliente
-    const [ventas] = await db.query(`
+    const [ventas] = await pool.query(`
       SELECT 
-        v.id,
+        v.id_venta,
         v.folio,
         v.fecha_venta,
         v.total,
         v.descuento,
         v.subtotal,
         v.metodo_pago,
-        v.notas,
-        c.nombre as cliente_nombre,
-        c.email as cliente_email,
-        u.username as vendedor
+        v.notas
       FROM ventas v
-      LEFT JOIN clientes c ON v.cliente_id = c.id
-      LEFT JOIN users u ON v.usuario_id = u.id
-      WHERE v.cliente_id = ?
+      WHERE v.id_usuario = ?
       ORDER BY v.fecha_venta DESC
     `, [clienteId]);
 
-    // Para cada venta, obtener sus detalles
     for (let venta of ventas) {
-      const [detalles] = await db.query(`
+      const [detalles] = await pool.query(`
         SELECT 
-          dv.id,
+          dv.id_detalle,
           dv.cantidad,
           dv.precio_unitario,
           dv.subtotal,
-          p.nombre as producto_nombre,
-          p.descripcion as producto_descripcion,
+          dv.nombre_producto,
           p.imagen as producto_imagen
         FROM detalle_venta dv
-        LEFT JOIN productos p ON dv.producto_id = p.id
-        WHERE dv.venta_id = ?
-      `, [venta.id]);
+        LEFT JOIN productos p ON dv.id_producto = p.id_producto
+        WHERE dv.id_venta = ?
+      `, [venta.id_venta]);
       
       venta.productos = detalles;
     }
 
-    res.json({
-      success: true,
-      ventas,
-      total: ventas.length
-    });
+    res.json({ success: true, ventas, total: ventas.length });
 
   } catch (error) {
-    console.error('❌ Error al obtener compras del cliente:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error al obtener historial de compras',
-      error: error.message
-    });
-  }
-});
-
-// 📋 Obtener compras de un cliente específico (para su perfil)
-router.get('/mis-compras/:clienteId', async (req, res) => {
-  try {
-    const { clienteId } = req.params;
-
-    // Obtener ventas del cliente (usando tabla users en lugar de clientes)
-    const [ventas] = await db.query(`
-      SELECT 
-        v.id,
-        v.folio,
-        v.fecha_venta,
-        v.total,
-        v.descuento,
-        v.subtotal,
-        v.metodo_pago,
-        v.notas,
-        u.username as cliente_nombre,
-        u.email as cliente_email
-      FROM ventas v
-      LEFT JOIN users u ON v.usuario_id = u.id
-      WHERE v.usuario_id = ?
-      ORDER BY v.fecha_venta DESC
-    `, [clienteId]);
-
-    // Para cada venta, obtener sus detalles
-    for (let venta of ventas) {
-      const [detalles] = await db.query(`
-        SELECT 
-          dv.id,
-          dv.cantidad,
-          dv.precio_unitario,
-          dv.subtotal,
-          p.nombre as producto_nombre,
-          p.descripcion as producto_descripcion,
-          p.imagen as producto_imagen
-        FROM detalle_venta dv
-        LEFT JOIN productos p ON dv.producto_id = p.id
-        WHERE dv.venta_id = ?
-      `, [venta.id]);
-      
-      venta.productos = detalles;
-    }
-
-    res.json({
-      success: true,
-      ventas,
-      total: ventas.length
-    });
-
-  } catch (error) {
-    console.error('❌ Error al obtener compras del cliente:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error al obtener historial de compras',
-      error: error.message
-    });
+    console.error('Error al obtener compras:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
