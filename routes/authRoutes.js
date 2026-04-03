@@ -722,5 +722,46 @@ router.post("/resend-verification", async (req, res) => {
   }
 });
 
+// ========================================
+// 🔒 CAMBIAR CONTRASEÑA DESDE EL PERFIL
+// ========================================
+router.post("/auth/change-password", async (req, res) => {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+
+    if (!userId || !currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Faltan campos requeridos" });
+    }
+
+    // Obtener usuario
+    const [users] = await pool.query(
+      "SELECT id, `password` FROM users WHERE id = ?",
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    // Verificar contraseña actual
+    const valid = await bcrypt.compare(currentPassword, users[0].password);
+    if (!valid) {
+      return res.status(401).json({ error: "La contraseña actual es incorrecta" });
+    }
+
+    // Actualizar contraseña
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await pool.query(
+      "UPDATE users SET `password` = ? WHERE id = ?",
+      [hashedPassword, userId]
+    );
+
+    res.json({ success: true, message: "Contraseña actualizada correctamente" });
+
+  } catch (error) {
+    console.error("Error en /auth/change-password:", error.message);
+    res.status(500).json({ error: "Error en el servidor" });
+  }
+});
 
 export default router;
