@@ -180,4 +180,27 @@ router.put('/:id/cancelar', async (req, res) => {
   }
 });
 
+// ==========================================
+// GET /api/apartados/usuario/:userId - Mis apartados
+// ==========================================
+router.get('/usuario/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const [rows] = await pool.query(`
+      SELECT 
+        a.*,
+        p.nombre AS producto_nombre, 
+        p.imagen AS producto_imagen,
+        p.sku AS producto_sku
+      FROM apartados a
+      JOIN productos p ON a.id_producto = p.id_producto
+      WHERE a.id_usuario = ?
+      ORDER BY a.created_at DESC
+    `, [userId]);
+    res.json({ success: true, apartados: rows });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
