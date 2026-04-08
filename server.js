@@ -12,6 +12,7 @@ import backupRoutes from './routes/backupRoutes.js';
 import apartadosRoutes from './routes/apartadosRoutes.js';
 import empleadosRoutes from './routes/empleadosRoutes.js';
 import reportesRoutes from './routes/reportes.js';
+import ofertasRoutes from './routes/ofertasRoutes.js';
 
 dotenv.config();
 
@@ -91,7 +92,7 @@ app.use(
       "https://starlit-gumdrop-ac85c8.netlify.app"
     ],
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"]
   })
 );
@@ -111,6 +112,7 @@ app.use('/api/respaldos', backupRoutes);
 app.use('/api/apartados', apartadosRoutes);
 app.use('/api/empleados', empleadosRoutes);
 app.use('/api/reportes', reportesRoutes);
+app.use('/api/ofertas', ofertasRoutes);
 
 // Ruta de health check
 app.get("/", (req, res) => {
