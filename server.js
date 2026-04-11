@@ -14,6 +14,8 @@ import empleadosRoutes from './routes/empleadosRoutes.js';
 import reportesRoutes from './routes/reportes.js';
 import ofertasRoutes from './routes/ofertasRoutes.js';
 import listaDeseosRoutes from './routes/listaDeseosRoutes.js';
+import prediccionRoutes from './routes/prediccionRoutes.js';
+
 
 dotenv.config();
 
@@ -115,6 +117,7 @@ app.use('/api/empleados', empleadosRoutes);
 app.use('/api/reportes', reportesRoutes);
 app.use('/api/ofertas', ofertasRoutes);
 app.use('/api/lista-deseos', listaDeseosRoutes);
+app.use('/api/prediccion', prediccionRoutes);
 
 // Ruta de health check
 app.get("/", (req, res) => {
