@@ -202,7 +202,7 @@ router.post('/generar', async (req, res) => {
 // ==========================================
 router.get('/historial', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM backups ORDER BY created_at DESC');
+    const [rows] = await pool.query('SELECT * FROM backups ORDER BY fecha DESC, hora DESC');
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener historial' });
