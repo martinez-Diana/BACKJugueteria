@@ -21,6 +21,14 @@ dotenv.config();
 
 const app = express();
 
+
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', 'https://starlit-gumdrop-ac85c8.netlify.app');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.sendStatus(200);
+});
+
 // ==========================================
 // 🔍 VERIFICAR VARIABLES DE ENTORNO CRÍTICAS
 // ==========================================
@@ -80,6 +88,9 @@ try {
   console.error("   Código:", error.code);
   process.exit(1);
 }
+
+
+
 
 // ==========================================
 // 🛡️ MIDDLEWARES
