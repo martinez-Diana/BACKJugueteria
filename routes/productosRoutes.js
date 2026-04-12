@@ -342,7 +342,7 @@ router.delete("/:id", async (req, res) => {
     });
 
   } catch (error) {
-    logger.error("Error al desactivar producto", { context: CTX, id, error: error.message });
+    logger.error("Error al desactivar producto", { context: CTX, id: req.params.id, error: error.message });
     res.status(500).json({ 
       error: 'Error al desactivar producto', 
       details: error.message 
