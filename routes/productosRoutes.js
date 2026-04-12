@@ -330,8 +330,8 @@ router.delete("/:id", async (req, res) => {
     }
 
     await pool.query(
-      'UPDATE productos SET estado = "inactivo" WHERE id_producto = ?',
-      [id]
+      'UPDATE productos SET estado = ? WHERE id_producto = ?',
+      ['inactivo', id]
     );
 
     logger.info(`Producto desactivado: ${productoExiste[0].nombre} (ID: ${id})`, { context: CTX, id });
