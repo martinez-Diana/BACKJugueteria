@@ -34,15 +34,16 @@ function getRango(query) {
 
 // ─── Helper: formato de agrupación ───────────────────────────────────────────
 function getGroupFormat(periodo, campo = "fecha_venta") {
+  const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   if (periodo === "year") {
     return {
       groupBy: `DATE_FORMAT(${campo}, '%Y-%m')`,
-      label:   `DATE_FORMAT(${campo}, '%b %Y')`,
+      label:   `CONCAT(MONTHNAME(${campo}), ' ', YEAR(${campo}))`,
     };
   }
   return {
     groupBy: `DATE(${campo})`,
-    label:   `DATE_FORMAT(${campo}, '%d %b')`,
+    label:   `DATE_FORMAT(${campo}, '%d/%m')`,
   };
 }
 
