@@ -136,9 +136,9 @@ router.put('/configuracion', async (req, res) => {
 
 // ==========================================
 // 🤖 RUTA: RESPALDO AUTOMÁTICO (Vercel Cron)
-// Vercel llama a este endpoint cada 6 horas
+// Vercel llama a este endpoint cada 24 horas
 // ==========================================
-router.post('/auto', async (req, res) => {
+router.get('/auto', async (req, res) => {
   try {
     console.log('🤖 Cron ejecutado:', new Date().toISOString());
 
