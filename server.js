@@ -22,12 +22,7 @@ dotenv.config();
 const app = express();
 
 
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', 'https://starlit-gumdrop-ac85c8.netlify.app');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.sendStatus(200);
-});
+
 
 // ==========================================
 // 🔍 VERIFICAR VARIABLES DE ENTORNO CRÍTICAS
@@ -106,8 +101,9 @@ app.use(
       "https://starlit-gumdrop-ac85c8.netlify.app"
     ],
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    optionsSuccessStatus: 200
   })
 );
 
