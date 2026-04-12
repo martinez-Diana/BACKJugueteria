@@ -8,6 +8,14 @@ import { PassThrough } from "stream";
 const CTX = "ProductosService";
 const router = express.Router();
 
+// Manejar preflight OPTIONS para CORS
+router.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', 'https://starlit-gumdrop-ac85c8.netlify.app');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.sendStatus(200);
+});
+
 // Multer en memoria (compatible con Vercel)
 const upload = multer({
   storage: multer.memoryStorage(),
